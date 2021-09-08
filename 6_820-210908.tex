@@ -1,0 +1,179 @@
+\documentclass[class=scrartcl]{standalone}
+\usepackage{chez}
+
+\begin{document}
+\chapter{Introduction}
+The goal of this course is to give an introduction to
+the ideas in the programming language community.
+In particular, we want to understand the tools that help us
+think about a program's behavior.
+This has applications in
+\begin{itemize}
+  \item finding bugs,
+  \item designing languages to prevent bugs,
+  \item program synthesis, and
+  \item program optimization.
+\end{itemize}
+As a prerequisite,
+we must be able to understand the program behavior ourselves.
+
+In particular, we want to learn
+  how to define programs and languages unambiguously,
+  how to prove theorems about the behavior of programs, and
+  how to automate this process.
+
+The big ideas in this class include:
+\begin{description}
+  \item[Operational semantics] which gives programs meaning
+    via interpreters that have the added feature that we can
+    make mathematical statements while interpreting.
+  \item[Program proofs as inductive invariants]
+    where we take advantage of the structure
+    that programs maintain within a loop
+  \item[Abstraction] where we model programs with specifications,
+    as opposed to the implementation.
+    E.g.\ considering a program as a bag of statements without order.
+  \item[Modularity] where we split programs up into pieces to analyze
+    smaller parts separately.
+\end{description}
+
+For this class, we will be using
+  Haskell,
+  Coq,
+  OCaml, and
+  the Spin model checker.
+
+
+\chapter{Functional Programming}
+\section{Introduction}
+In functional programming, functions are first-class values.
+This means that, for instance, you can pass functions as values and
+  return functions in other functions.
+Another (more defining) feature of functional programming languages are that
+they are based on lambda calculus.
+
+The following is a function definition
+\begin{minted}{haskell}
+   increment x = x + 1
+-- [1]      [2]  [ 3 ]
+\end{minted}
+\begin{enumerate}
+  \item \mintinline{haskell}{increment} is the name of
+        the function we are defining.
+  \item The first \mintinline{haskell}{x} is the parameter of the function.
+  \item The \mintinline{haskell}{x + 1} is the body of the function.
+        It is how the function is evaluated if an argument is supplied.
+\end{enumerate}
+
+\subsection{Scoping}
+When we want to introduce components of expressions,
+we can use the \mintinline{haskell}{let ... in ...} construction: % chktex 26 chktex 11 chktex 12
+\begin{minted}{haskell}
+let dx = 5 - 2
+    dy = 3 - 1
+ in dx * dx + dy * dy
+\end{minted}
+which is equivalent to
+\mintinline{haskell}{(5 - 2) * (5 - 2) + (3 - 1) * (3 - 1)}. % chktex 8
+The order of the statements inside of the \mintinline{haskell}{let}
+do not matter, even if one depends on the other.
+
+When we have nested \mintinline{haskell}{let ... in ...} expressions % chktex 26 chktex 11 chktex 12
+with the same variable names, the value of the variables are based on
+the innermost scope.
+For instance,
+\begin{minted}{haskell}
+let x = 3
+    y = 4
+ in let y = 5
+     in x + y
+\end{minted}
+and
+\begin{minted}{haskell}
+let x = 3
+    y = 4
+ in x + 5
+\end{minted}
+are equivalent.
+
+While the compiler may understand what this program means,
+and the program only has one interpretation,
+it is confusing for humans to understand it when different values
+are bound to the same name.
+To solve this issue, we can rename some variables
+(formally called \(\alpha\)-renaming).
+This gives us the equivalent code of
+\begin{minted}{haskell}
+let x = 3
+    y = 4
+ in let y' = 5
+     in x + y'
+\end{minted}
+Note that the apostrophe (\mintinline{haskell}{'}, typically called ``prime'')
+is indeed a valid character to use in variable names.
+
+However, we should be careful when doing this, to make sure we are not
+overriding another value.
+In particular, we do not want to rename \mintinline{haskell}{y}
+to \mintinline{haskell}{x}, as this changes the behavior of the program.
+\begin{minted}{haskell}
+let x = 3
+    y = 4
+ in let x = 5
+     in x + x
+\end{minted}
+Of course, the easy solution is to just not code like this in the first place.
+
+\subsection{Currying}
+In Haskell, a function can only have one parameter.
+However, we can still define functions that
+seem to take in multiple parameters.
+\begin{minted}{haskell}
+let plus x y = x + y
+ in plus 3 4
+-- 7
+\end{minted}
+The way we interpret this is \mintinline{haskell}{(plus x) y = x + y}.
+In particular, \mintinline{haskell}{plus} is a function that takes in
+a number \mintinline{haskell}{x} and returns another function
+\mintinline{haskell}{plus x}.
+This new function called \mintinline{haskell}{plus x} then takes in
+another number \mintinline{haskell}{y} and adds \mintinline{haskell}{x} to it.
+This idea of transforming a function that takes multiple arguments
+into one that takes in arguments one at a time is called \vocab{currying}.
+This is useful because it lets us partially apply functions:
+\begin{minted}{haskell}
+let plus x y = x + y
+    increment = plus 1
+ in increment 3
+-- 4
+\end{minted}
+In general, we interpret \mintinline{haskell}{(a b c d)} as
+\mintinline{haskell}{(((a b) c) d)}, i.e.\ function application
+associates to the left.
+
+
+\subsection{Infix operators}
+Note that we have been defining \mintinline{haskell}{plus x y = x + y}.
+It would be convenient if we are able to say that \mintinline{haskell}{plus}
+is the same thing as \mintinline{haskell}{+}.
+We can indeed do this. In the expression \mintinline{haskell}{(x + y)},
+we are using \mintinline{haskell}{+} as an infix operator,
+but we can convert it to a normal function by
+writing it as \mintinline{haskell}{(+)}.
+In particular, our original definition is equivalent too
+\mintinline{haskell}{plus x y = (+) x y}.
+We can simplify this further to the code \mintinline{haskell}{plus = (+)}.
+
+Conversely, if we have a named function that takes in (at least) two arguments,
+we can make it infix by surrounding the name in backticks, like
+\mintinline{haskell}{(x `plus` y)}. % chktex 33
+
+
+
+
+
+
+
+
+\end{document}
