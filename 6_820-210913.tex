@@ -1,0 +1,229 @@
+\documentclass[class=scrartcl]{standalone}
+\usepackage{chez}
+
+\begin{document}
+\section{Lambda Calculus}
+Lambda calculus gives us a way to write and apply functions without
+needing to give them names.
+
+The heart of \(\lambda\)-calculus are expressions.
+They have the grammar
+\[
+  E = x
+    \mid \lambda x . E
+    \mid E E.
+\]
+The \(x\) is a variable.
+The more interesting terms are
+\begin{description}
+  \item[application] \(E_1 E_2\)
+    where \(E_1\) is the function
+    and \(E_2\) is the argument.
+    Application is left-associative,
+    so \(E_1 E_2 E_3 E_4\) means \((((E_1 E_2) E_3) E_4)\).
+  \item[abstraction] \(\lambda x. E\)
+    where the \(x\) is called the \vocab{bound variable}
+    and \(E\) is the \vocab{lambda term}.
+    The body of abstraction extends as far right as possible.
+\end{description}
+
+\(\lambda\)-calculus follows \vocab{lexical scoping},
+which means that variables are bound based on the closest definition.
+
+A \vocab{free variables} are the variables that
+are not bound by a \(\lambda\) within the expression.
+In particular, we have the following rules:
+\begin{itemize}
+  \item \(FV(x) = \set{x}\)
+  \item \(FV(E_1 E_2) = FV(E_1) \union FV(E_2)\)
+  \item \(FV(\lambda x. E) = FV(E) \setminus \set{x}\)
+\end{itemize}
+A \vocab{combinator} is a \(\lambda\)-expression with no free variables.
+
+To do calculation, we use a rule called \vocab{\(\beta\)-reduction},
+which is a reduction rule telling us how to apply functions:
+\[
+  (\lambda x. E) \to E[E_a / x].
+\]
+The expression \(E[E_a / x]\) means
+we substitute \(E_a\) for \(x\) in \(E\).
+More formally:
+\begin{itemize}
+  \item If \(E\) is a variable \(y\),
+        \[
+          y[E_a / x] = \begin{cases*}
+              E_a & if \(x \equiv y\) \\[-1ex]
+            y & otherwise.
+          \end{cases*}
+        \]
+  \item If \(E\) is an application \(E_1 E_2\),
+        \[
+          (E_1 E_2)[E_a / x] = (E_1[E_a / x]) (E_2[E_a / x]).
+        \]
+  \item If \(E\) is an abstraction \(\lambda y. E\),
+        \[
+          (\lambda y. E)[E_a / x] =
+          \begin{cases*}
+            \lambda y. E & if \(x \equiv y\) \\[-1ex]
+            \lambda y. E[z / y][E_a / x] & otherwise, % chktex 1
+          \end{cases*}
+        \]
+        where \(z \notin FV(E) \union FV(E_a) \union FV(x)\).
+        Note that we need the \([z / y]\) step in the case
+        that \(E\) has the variable \(y\) already,
+        to avoid substitution capture.
+\end{itemize}
+
+The process of the substitution \([z / y]\) has a more general name:
+\vocab{\(\alpha\)-substitution}:
+\[
+  \lambda x. E \to \lambda y.E[y / x],
+\]
+where \(y \notin FV(E)\).
+
+There is another rule called \vocab{\(\eta\)-reduction}:
+\[
+  \lambda x. E x \to E,
+\]
+where \(x \notin FV(E)\).
+
+We call the subterms that match the left sides of these rules \vocab{redexes}.
+We say that a term is in \vocab{normal form} if they contain no redexs,
+i.e.\ we cannot apply any more rules.
+
+\begin{example} % cons, head, tail
+  Consider the \(\lambda\)-expressions
+  \begin{align*}
+    C &\equiv \lambda x. \lambda y. \lambda f. f x y \\
+    H &\equiv \lambda x. \lambda y. x \\
+    T &\equiv \lambda x. \lambda y. y
+  \end{align*}
+  These expressions correspond to
+    \textsf{cons},
+    \textsf{head}, and
+    \textsf{tail}.
+  For instance,
+  \begin{align*}
+    (C a b) H &\to ((\lambda x. \lambda y. \lambda f. f x y) a b)
+                   (\lambda x. \lambda y. x) \\
+              &\to (\lambda f. f a b)
+                   (\lambda x. \lambda y. x) \\
+              &\to (\lambda x. \lambda y. x) a b \\
+              &\to a \\
+    (C a b) T &\to ((\lambda x. \lambda y. \lambda f. f x y) a b)
+                   (\lambda x. \lambda y. y) \\
+              &\to (\lambda f. f a b)
+                   (\lambda x. \lambda y. y) \\
+              &\to (\lambda x. \lambda y. y) a b \\
+              &\to b.
+  \end{align*}
+  These combinators can be interpreted multiple ways.
+  Another way of interpreting \(C\), \(H\), and \(T\) are as
+    \textsf{pair},
+    \textsf{first}, and
+    \textsf{second}.
+\end{example}
+
+\subsection{Church encoding}
+We can also encode the natural numbers with \(\lambda\)-expressions.
+Let
+\begin{align*}
+  0 &\equiv \lambda f. \lambda x. x \\
+  1 &\equiv \lambda f. \lambda x. f x \\
+  2 &\equiv \lambda f. \lambda x. f (f x) \\
+  3 &\equiv \lambda f. \lambda x. f (f (f x)) \\
+    \MTFlushSpaceAbove
+    &\vdotswithin{\equiv}
+\end{align*}
+where we interpret the natural number \(n\) as
+applying a function \(f\) to some argument \(x\), \(n\) times.
+
+\DeclareDocumentCommand{\succ}{}{\operatorname{\textsf{succ}}}
+Using this interpretation, we can define \(\succ\), the successor function.
+In particular, \(\succ\) is a function that takes in a natural \(n\)
+and returns another numeral that applies the function \(f\), \(n + 1\) times.
+We know that \(n f x\) applies the function \(n\) times so
+we apply \(f\) to the result of this once more to get the desired expression.
+\begin{align*}
+  \succ &\equiv \lambda n. (\lambda f. \lambda x. f (n f x)) \\
+        &\equiv \lambda n. \lambda f. \lambda x. f (n f x).
+\end{align*}
+
+\DeclareDocumentCommand{\lambdaplus}{}{\operatorname{\textsf{plus}}}
+Since a natural \(n\) is encoded as applying a function \(n\) times,
+we can define \(\lambdaplus\) as repeated application of \(\succ\):
+\begin{align*}
+  \lambdaplus &\equiv \lambda m. \lambda n. m \succ n \\
+              &\equiv \lambda m. m \succ.
+\end{align*}
+where \(m \succ n\) can be thought of as applying \(\succ\),
+\(m\) times to \(n\).
+The second line is obtained from \(\eta\)-reduction
+on \(\lambda n. m \succ n\).
+
+\DeclareDocumentCommand{\lambdatimes}{}{\operatorname{\textsf{times}}}
+We can similarly define \(\lambdatimes\) to be
+\[
+  \lambdatimes \equiv \lambda m. \lambda n. m (\lambdaplus n) 0.
+\]
+
+
+\DeclareDocumentCommand{\lambdatrue}{}{\operatorname{\textsf{true}}}
+\DeclareDocumentCommand{\lambdafalse}{}{\operatorname{\textsf{false}}}
+We can also represent booleans as:
+\begin{align*}
+  \lambdatrue &\equiv \lambda x. \lambda y. x \\
+  \lambdafalse &\equiv \lambda x. \lambda y. y
+\end{align*}
+
+\DeclareDocumentCommand{\lambdacond}{}{\operatorname{\textsf{cond}}}
+If we want to make choices based on a boolean,
+like the \mintinline{c}{b?x:y} operator in C,
+note that \(\lambdatrue\) and \(\lambdafalse\) select
+their first and second arguments respectively.
+Therefore, we have the analogous operator in \(\lambda\)-calculus
+\[
+  \lambdacond = \lambda b. \lambda x. \lambda y. b x y.
+\]
+Note that this \(\eta\)-reduces to the identity function,
+so we can actually just apply the boolean
+to two values we want to choose betwen.
+
+\DeclareDocumentCommand{\lambdaiszero}{}{\operatorname{\textsf{isZero}}}
+We can write a function \(\lambdaiszero\)
+by applying \(\lambda x. \lambdafalse\) to \(\lambdatrue\) \(n\) times.
+In particular, for any natural other than \(0\),
+the result will be \(\lambdafalse\),
+and otherwise it will be \(\lambdatrue\).
+Written out,
+\begin{align*}
+  \lambdaiszero &\equiv \lambda n. n (\lambda x. \lambdafalse) \lambdatrue \\
+                &\equiv \lambda n. n (\lambdatrue \lambdafalse) \lambdatrue.
+\end{align*}
+
+\subsection{Semantics}
+
+Operational semantics talks about how the terms reduce.
+Operational semantics means that two terms are the same thing if
+one can be reduced to the other,
+e.g.\ \(\textsc{plus} \, 0 \, 1\) and \(1\) should have the same meaning.
+
+Denotational semantics says what the terms mean.
+Denotational semantics is mapping lambda terms to meanings like the naturals,
+which should distinguish between terms that should not be equal.
+
+The goal is to show that operational semantics
+and denotational semantics agree.
+
+A semantics is \vocab{fully abstract} if
+when two terms have different meanings according to the semantics,
+then there exists a term that can distinguish them.
+
+
+
+
+
+
+
+
+\end{document}
