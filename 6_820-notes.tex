@@ -1,6 +1,17 @@
 \documentclass{scrreprt}
 \usepackage{standalone}
 \usepackage[code]{chez}
+\usepackage{prftree}
+
+\NewDocumentCommand{\lcalcname}{m}{\operatorname{\textsf{#1}}}
+\NewDocumentCommand{\pname}{m}{\operatorname{\textsf{#1}}}
+\NewDocumentCommand{\pbool}{}{\textsf{bool}}
+\NewDocumentCommand{\pint}{}{\textsf{int}}
+\NewDocumentCommand{\pifthenelse}{m m m}{\pname{if}#1\pname{then}#2\pname{else}#3}
+\NewDocumentCommand{\of}{}{\mathbin{:}}
+\newmintinline[icoq]{coq}{}
+
+\setlength{\prfinterspace}{1.2em}
 
 \title{6.820 Notes}
 \author{Jason Chen \\ Lecturer: Armando Solar-Lezama}
@@ -13,6 +24,9 @@
 
 \input{6_820-210908}
 \input{6_820-210913}
+\input{6_820-210915}
+\input{6_820-210920}
+\input{6_820-210922}
 % insert here
 
 \end{document}

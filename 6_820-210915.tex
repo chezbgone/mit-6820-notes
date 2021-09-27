@@ -1,0 +1,305 @@
+\documentclass[class=scrartcl]{standalone}
+\usepackage{chez}
+
+\begin{document}
+
+
+\subsection{Semantics}
+
+Operational semantics talks about how the terms reduce.
+Operational semantics means that two terms are the same thing if
+one can be reduced to the other,
+e.g.\ \(\textsc{plus} \, 0 \, 1\) and \(1\) should have the same meaning.
+
+Denotational semantics says what the terms mean.
+Denotational semantics is mapping lambda terms to meanings like the naturals,
+which should distinguish between terms that should not be equal.
+
+The goal is to show that operational semantics
+and denotational semantics agree.
+A semantics is \vocab{fully abstract} if
+when two terms have different meanings according to the semantics,
+then there exists a term that can distinguish them.
+
+If we have a lambda term, and replace each redex by \(\bot\) (\vocab{bottom}),
+then we get the \vocab{instantaneous information} of the term,
+i.e.\ ``what we already know''. Here \(\bot\) represents ``no information''.
+
+\begin{example}
+  We can calculate the instantaneous information for a few terms as we evaluate
+  \begin{align*}
+    (\lambda q. \lambda p. p (q a)) (\lambda z. z)
+      &\xrightarrow{\text{instantaneous information}} \bot \\
+    \lambda q. \lambda p. p ((\lambda z. z) a)
+      &\xrightarrow{\text{instantaneous information}} \lambda p. p \bot \\
+    \lambda p. p a
+      &\xrightarrow{\text{instantaneous information}} \lambda p. p a
+  \end{align*}
+\end{example}
+
+Note that \(\beta\)-reductions monotonically increase information.
+We say that the meaning of a term is the maximum amount of information
+that can be obtained by \(\beta\)-reductions.
+
+One natural definition is to say that the meaning of a term is the normal form.
+However, a term may not have a normal form, e.g.\
+\[
+  \Omega = (\lambda x. x x)(\lambda x. x x).
+\]
+If we try to reduce this, we get \(\Omega\) back.
+We say that the meaning of \(\Omega\) is \(\bot\).
+If we have a term like \(\lambda x. x \Omega\),
+then its meaning is \(\lambda x. x \bot\).
+
+Also, we may consider the case where a term may have more than one normal form.
+If this is true, then the term would have multiple meanings.
+However, this is not possible because of \vocab{confluence}.
+
+A term may have multiple redexes, e.g.\
+\[
+  (\underbracket{(\lambda x. M) A}_{\rho_1})
+    (\underbracket{(\lambda x. N) B}_{\rho_2}) \qquad
+  (\underbracket{(\lambda x. M)
+    (\underbracket{(\lambda x. N) B}_{\rho_2})}_{\rho_1})
+\]
+Note that \(\rho_1\) followed by \(\rho_2\) does not necessarily
+produce the same thing as \(\rho_2\) followed by \(\rho_1\).
+However, Church-Rosser property says that this does not matter.
+\begin{definition}
+  The \vocab{Church-Rosser property} says that if
+    \(E \to E_1\) and \(E \to E_2\),
+  then there exists some \(E_3\) such that
+    \(E_1 \to E_3\) and \(E_2 \to E_3\).
+\end{definition}
+
+\begin{theorem}[Church-Rosser, Martin-L\"of \& Tate]
+  \(\lambda\)-calculus has the Church-Rosser property.
+\end{theorem}
+
+This implies that if a normal form exists, then it is unique.
+
+
+\subsection{Interpreters}
+An \vocab{interpreter} for the \(\lambda\)-calculus is a program
+that reduces \(\lambda\)-expressions to ``answers''.
+However, to do this we need to know
+  what we mean by ``answers'', and
+  how to choose redexs.
+
+One way to define ``answer'' is to think about normal form.
+However, this may be too restrictive, so we consider the following:
+
+\begin{definition}
+  A \(\beta\)-redex \(r\) is in \vocab{head position} in a term \(t\)
+  if \(t\) is of the form
+  \[
+    t = \lambda x_1 \dots \lambda x_n.
+          \underbracket{(\lambda x. A) M_1}_r M_2 \dots M_m
+  \]
+  where \(n \geq 0\) and \(m \geq 1\).
+  Recall that normal form is a term in which
+  we cannot apply any more \(\beta\)-reductions,
+\end{definition}
+
+\begin{definition}
+  Expressions are in \vocab{head normal form}
+  if they do not contain a \(\beta\)-reduction in head position.
+  In particular,
+  \begin{itemize}[nosep]
+    \item \(x\) is in HNF,
+    \item \((\lambda x. E)\) is in HNF if \(E\) is in HNF, and
+    \item \((x E_1 \dots E_n)\) is in HNF.\@
+  \end{itemize}
+  They are terms of the following form:
+  \[
+    \lambda x_1 \dots \lambda x_n. x M_1 M_2 \dots M_m,
+  \]
+  where \(x\) is a variable, and \(n, m \geq 0\).
+  Note that \(M_1, \dots, M_m\) are not necessarily in normal form.
+\end{definition}
+
+This is semantically the most interesting, because it represents
+the information content of an expression.
+
+\begin{definition}
+  Expressions are in \vocab{weak head normal form} if
+  the left-most application is not a redex.
+  In particular,
+  \begin{itemize}[nosep]
+    \item \(x\) is in WHNF,
+    \item \((\lambda x. E)\) is in WHNF, and
+    \item \((x E_1 \dots E_n)\) is in WHNF.\@
+  \end{itemize}
+  Equivalently, a term is in WHNF if it is in HNF or a lambda abstraction.
+\end{definition}
+This is the most practical form, because
+it represents printable forms.
+
+\begin{example}
+  \begin{itemize}[nosep]
+    \item \((\lambda x. x y)\), \(z\), and \(x y\) are in normal form.
+    \item \((x ((\lambda y. y) z))\) and \((\lambda x. (x z))\)
+          are in HNF but not normal form.
+    \item \((\lambda x. (\lambda t. t y) x)\) is in WHNF but not HNF.\@
+    \item \(\Omega = (\lambda x. x x)(\lambda x. x x)\)
+          is not in any normal form.
+  \end{itemize}
+\end{example}
+
+We have two common reduction strategies.
+\begin{description}
+  \item[Applicative order] is when we evaluate
+        the right-most innermost redex first.
+        This is also called \vocab{call by value} evaluation.
+  \item[Normal order] is when we evaluate
+        the left-most (outermost) redex first.
+        This is also called \vocab{call by name} evaluation.
+\end{description}
+
+When we compute a normal form, keep in mind that:
+\begin{itemize}
+  \item Not every \(\lambda\)-expression has an answer, i.e.\
+        \[
+          \Omega \to \Omega \to \Omega \to \cdots.
+        \]
+  \item Even if an expression has an answer, not all reduction strategies
+        may produce it, e.g.\ \((\lambda x. \lambda y. y) \Omega\).
+\end{itemize}
+
+\begin{remark}
+  In most languages, e.g.\ Java or C, we use call by value evaluation
+  for almost everything.
+  The way we get around it for recursion is that \texttt{if} statements
+  do not evaluate both branches.
+\end{remark}
+
+A reduction strategy is \vocab{normalizing} if it terminates and produces
+an answer of an expression whenever it has an answer.
+
+\begin{theorem}
+  The normal order reduction strategy
+  is normalizing for the \(\lambda\)-calculus.
+\end{theorem}
+
+A call-by-name interpreter gives the weak head normal form of an expression
+by evaluating the left-most redex.
+In particular, we apply the function before evaluating the arguments.
+\NewDocumentCommand{\cnform}{}{\textsf{cn}}
+
+\newsavebox\tmpcode%
+\begin{lrbox}{\tmpcode}
+\begin{minipage}[t]{5cm}
+\begin{minted}[linenos=false, escapeinside=||]{haskell}
+let |$f$| = |$\cnform(E_1)$|
+ in case |$f$| of
+      |$\lambda x. E_3$| -> |$\cnform(E_3 [E_2 / x])$|
+      _ -> |$f E_2$|
+\end{minted}
+\end{minipage}
+\end{lrbox}
+\begin{align*}
+  \cnform(\bbrackets{x})            &= x            \\
+  \cnform(\bbrackets{\lambda x. E}) &= \lambda x. E \\
+  \cnform(\bbrackets{E_1 E_2})      &= \usebox{\tmpcode}
+\end{align*}
+
+In a call-by-value interpreter, we evaluate the right-most innermost redex
+not inside of a lambda abstraction.
+In particular, we evaluate the arguments before applying the function.
+\NewDocumentCommand{\cvform}{}{\textsf{cv}}
+
+\begin{lrbox}{\tmpcode}
+\begin{minipage}[t]{5cm}
+\begin{minted}[linenos=false, escapeinside=||]{haskell}
+let |$f$| = |$\cvform(E_1)$|
+    |$a$| = |$\cvform(E_2)$|
+ in case |$f$| of
+      |$\lambda x. E_3$| -> |$\cvform(E_3 [a / x])$|
+      _ -> |$f a$|
+\end{minted}
+\end{minipage}
+\end{lrbox}
+\begin{align*}
+  \cvform(\bbrackets{x})            &= x            \\
+  \cvform(\bbrackets{\lambda x. E}) &= \lambda x. E \\
+  \cvform(\bbrackets{E_1 E_2})      &= \usebox{\tmpcode}
+\end{align*}
+
+\subsection{Recursion}
+In \(\lambda\)-calculus, recursive functions can be thought of as
+solutions of fixed point equations.
+For instance, we know
+\[
+  \textsf{fact} =
+    \lambda n.
+      \lcalcname{Cond} (\lcalcname{isZero} n)
+        (1)
+        (\lcalcname{Times} n (\lcalcname{fact} (\lcalcname{Minus} n \, 1))).
+\]
+If we have the function
+\[
+  H = \lambda f.
+    \lambda n.
+      \lcalcname{Cond} (\lcalcname{isZero} n)
+        (1)
+        (\lcalcname{Times} n (f (\lcalcname{Minus} n\, 1))),
+\]
+note that \(\lcalcname{fact}\) is a fixed point of \(H\)
+(i.e.\ \(H \lcalcname{fact} = \lcalcname{fact}\)).
+
+Now we need to figure out how to determine the fixed point of a function.
+If we were doing this in \(\RR\), it would not be hard to do by iteration,
+as we have a notion of distance.
+Here we are working in a space of discrete functions,
+in which we can use a similar idea, called Scott continuity.
+
+One thing to be cautious about is the existence of more than one fixed point.
+For instance, consider
+\begin{gather*}
+  f = \lambda n.
+        \lcalcname{if}(n = 0)
+        \lcalcname{then}(1)
+        \lcalcname{else}(\lcalcname{cond}(n = 1, f (3), f (n - 2))) \\
+  H = \lambda f. \lambda n.
+        \lcalcname{if}(n = 0)
+        \lcalcname{then}(1)
+        \lcalcname{else}(\lcalcname{cond}(n = 1, f (3), f (n - 2)))
+\end{gather*}
+Note that both
+\begin{align*}
+  f_1 n = \begin{cases*}
+    1 & \(n\) is even \\[-1ex]
+    \bot & otherwise
+  \end{cases*} \\
+  f_2 n = \begin{cases*}
+    1 & \(n\) is even \\[-1ex]
+    5 & otherwise
+  \end{cases*}
+\end{align*}
+are both fixed points of \(H\).
+However, it feels like \(f_2\) is ``making things up'' about \(f\).
+In particular, \(f_1\) contains no arbitrary information,
+and is called the least fixed point.
+Moreover, assuming monotonicity and continuity,
+least fixed points are unique and computable.
+
+We can actually define an order on these,
+and then compute some optimal fixed point.
+Recall \(\Omega = (\lambda x. x x)(\lambda x. x x)\).
+If we modify this to \(\Omega_F = (\lambda x. F(x x))(\lambda x. F(x x))\),
+note that this \(\beta\)-reduces to
+\(F ((\lambda x. F(x x))(\lambda x. F(x x)))\).
+In particular, we have \(F \Omega_F = \Omega_F\).
+This means that \(\Omega_F\) is a fixed point of \(F\)!
+Therefore, \(Y = \lambda F. \Omega_F\) is a function
+that gives the fixed point of \(F\).
+
+
+
+
+
+
+
+
+
+\end{document}

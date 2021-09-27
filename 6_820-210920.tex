@@ -1,0 +1,147 @@
+\documentclass[class=scrartcl]{standalone}
+\usepackage{chez}
+\usepackage{minted}
+
+\begin{document}
+% added to recursion in prev day
+
+\section{Big Step Semantics}
+Big step operational semantics models the execution in an abstract machine.
+\begin{itemize}
+  \item There are \vocab{judgements},
+        written \(\angles{\text{configuration}} \to \text{result}\),
+        describing how a program configuration is evaluated into a result.
+        The configuration typically includes the program as well as any state.
+  \item There are \vocab{inference rules},
+        which describe how to derive judgements for an arbitrary program.
+        These are sometimes called deriviation rules or evaluation rules.
+\end{itemize}
+
+\begin{example}
+  Call by name evaluation order is described by:
+  \[
+    \prfaxiom{\angles{x} \to x} \qquad
+    \prfaxiom{\angles{\lambda x. e} \to \lambda x. e} \qquad
+    \prftree{\angles{e_1} \to \lambda x. e_1'}
+            {\angles{e_1'[e_2 / x]} \to e_3}
+            {\angles{\lambda x. e} \to \lambda x. e} \qquad
+    \prftree{\angles{e_1} \to x}
+            {\angles{e_1 e_2} \to x e_2} \qquad
+    \prftree{\angles{e_1} \to e_a e_b}
+            {\angles{e_1 e_2} \to e_a e_b e_2}
+  \]
+  Call by value evaluation order is described by:
+  \begin{gather*}
+    \prfaxiom{\angles{x} \to x} \qquad
+    \prfaxiom{\angles{\lambda x. e} \to \lambda x. e} \qquad
+    \prftree{\angles{e_1} \to \lambda x. e_1'}
+            {\angles{e_2 \to e_3} \to e_3}
+            {\angles{e_1'[e_2 / x]} \to e_2'}
+            {\angles{e_1 e_2} \to e_3}\\
+    \prftree{\angles{e_1} \to x}
+            {\angles{e_2} \to e_2'}
+            {\angles{e_1 e_2} \to x e_2'} \qquad
+    \prftree{\angles{e_1} \to e_a e_b}
+            {\angles{e_2} \to e_2'}
+            {\angles{e_1 e_2} \to e_a e_b e_2'}
+  \end{gather*}
+\end{example}
+Often, we drop the angle brackets for convenience.
+
+\begin{example}
+  To prove \((\lambda x. x)((\lambda y.y) z) \to z\), we have the proof tree
+  \[
+    \prftree{\prfaxiom{\lambda x. x \to \lambda x. x}}
+            {\prftree{\prfaxiom{\lambda y. y \to \lambda y. y}}
+                     {\prfaxiom{y[z / y] \to z}}
+                     {(\lambda y. y) z \to z}
+            }
+            {(\lambda x. x)((\lambda y.y) z) \to z}
+  \]
+\end{example}
+
+
+
+\section{Coq}
+Before we work with big-step semantics,
+we will first introduce a tool we will use.
+One good thing about Coq is that it tries to rely on as little as possible.
+
+In Coq, we can introduce definitions and theorem,
+and we prove them by applying steps called \vocab{tactics}.
+
+For instance, we can define the natural numbers:
+\begin{minted}{coq}
+Inductive nat := O | S (n : nat).
+Fixpoint plus (n m : nat) : nat :=
+  match n with
+  | O => m
+  | S n' => S (plus n' m)
+  end.
+\end{minted}
+
+Here \mintinline{coq}{O} represents zero, and
+\mintinline{coq}{S} represents successor.
+
+To define a theorem and its proof, we can write:
+\begin{minted}{coq}
+Lemma O_plus : forall n, plus O n = n.
+Proof.
+  (* sequence of tactics *)
+Qed.
+\end{minted}
+
+Here, the word \icoq{Lemma} can be replaced with any of
+\icoq{Theorem},
+\icoq{Remark},
+\icoq{Corollary},
+\icoq{Fact}, or
+\icoq{Proposition}.
+
+Proving theorems in Coq is a very interactive process,
+so it is impossible to recreate on paper.
+It is strongly recommended to try running the Coq code,
+as just knowing the tactics is only a small part of the tool.
+
+When running Coq code interactively,
+we can check the status of a proof
+by running the code up to some point in the proof.
+There is a horizontal line,
+above which is a list of hypotheses:
+objects we know exist or statements we know are true.
+Below the line is the goal we want to prove.
+
+
+\subsection{Tactics}
+In order to complete proofs,
+we apply tactics that use the hypotheses to resolve our goal.
+
+\begin{itemize}
+  \item \icoq{reflexivity} can be used if our goal
+        is resolved by normalizing terms,
+        e.g.\ \icoq{plus O (S O) = S O}.
+  \item \icoq{induction x} can be used to prove a goal
+        by induction on a quantified variable \icoq{x}.
+        Here, \icoq{x} is a inductively defined data type.
+        Note that all variables quantified before \icoq{x}
+        will be fixed throughout the induction.
+        More on this in the next section.
+  \item \icoq{simpl} will generally simplify your goal.
+        Typically, it will include doing some \(\beta\)-reduction.
+  \item \icoq{rewrite H} will rewrite the goal using a theorem/hypothesis
+        \icoq{H : a = b}, by replacing \icoq{a} with \icoq{b}. % chktex 26
+        Similarly, \icoq{rewrite <- H} will replace \icoq{b} with \icoq{a}.
+  \item \icoq{intro} moves a quantified variable or hypothesis above the line.
+        \icoq{intros} will do this as many as possible.
+  \item \icoq{apply thm} will apply a theorem,
+        reducing the goal to a subgoals
+        for each of the theorem's hypotheses.
+        \icoq{H : a = b}, by replacing \icoq{a} with \icoq{b}. % chktex 26
+  \item \icoq{assumption} will solve a goal that matches a hypothesis.
+  \item \icoq{destruct E} will do case analysis on some term \icoq{E}.
+\end{itemize}
+
+
+
+
+\end{document}
