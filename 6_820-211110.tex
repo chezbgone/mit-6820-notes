@@ -1,0 +1,175 @@
+\documentclass[class=scrartcl]{standalone}
+\usepackage{chez}
+
+\begin{document}
+\chapter{Abstract Interpretation}
+So far, we have learned:
+\begin{itemize}
+  \item Operational semantics, which tells us
+        how programs behave on a given input.
+  \item Types, which are annotations that describes the data
+        that can be referred to by a variable.
+        We can describe global properties execution,
+        but only one variable at a time.
+        Moreover, this is limited by the type system designer.
+  \item Program logics, which are annotations that describe
+        properties of the state at a given point in the program.
+        It is easy to describe complex properties of program state,
+        but messy to describe properties that hold over time.
+        However, the analysis can be expensive,
+        and annotations (loop invariants) are hard to infer.
+\end{itemize}
+
+\section{Motivation}
+Consider the following program:
+\begin{minted}{text}
+{true}
+y=0;
+while(x<10){
+  x = x+1;
+  y = y+2;
+}
+{even(y)}
+\end{minted}
+To prove this, we must find a loop invariant \(A\) such that
+\[
+  \prftree{\vdash \hoare{A \land b}{c}{A}}
+          {\vdash \hoare{A}{\pwhiledo{b}{c}}{A \land \pnot b}}
+\]
+The idea is that \(A\) is a set of states,
+and \(c\) takes elements in \(A \land b\)
+to elements in \(A\).
+
+Consider the simpler problem
+\[
+  \prftree{\vdash \hoare{A}{c}{A}}
+          {\vdash \hoare{A}{\pwhiledo{b}{c}}{A}}
+\]
+This rule is strictly weaker, and many correct programs
+cannot be proved with it.
+The idea of this is that \(c\) transforms states in \(A\) to states in \(A\).
+
+Now the question is how to come up with the invariant \(A\).
+We want a set \(A\) such that \(\vdash \hoare{A}{c}{A}\),
+and it has to be both small enough to prove the postcondition,
+and weak enough to prove the precondition.
+
+If we let
+\[
+  F(P) = \operatorname{wpc}(c, P) \land \textsf{postcondition},
+\]
+then we want the greatest fixpoint solution of \(A = F(A)\).
+Then more questions arise:
+\begin{itemize}
+  \item Will this converge/always find solutions.
+  \item When is it better to use \(\operatorname{wpc}\) vs.\ \(\operatorname{spc}\)?
+  \item How do we minimize loss of precision?
+\end{itemize}
+
+\section{Abstract Interpretation}
+\subsection{Partial orders and lattices}
+To talk about abstract interpretation,
+we will first need to learn about partial orders.
+
+A \vocab{partial order} is a set \(P\) with a relation \(\leq\)
+such that for all \(x, y, z \in P\),
+\(\leq\) is reflexive, asymmetric, and transitive.
+We can then use this to define upper and lower bounds
+We use \(\bigvee S\) for least upper bound of \(S \subseteq P\).
+Similarly, we use \(\bigwedge S\) for greatest lower bound of \(S \subseteq P\).
+Sometimes, people use \(\sqcup\), \(\sqcap\), \(\cup\), or \(\cap\).
+
+We say that \(y\) \vocab{covers} \(x\) if \(x < y\) and
+\(x \leq z < y \implies x = z\).
+Intuitively, this says that nothing is between \(x\) and \(y\).
+
+If \(x \wedge y\) and \(x \vee y\) exists for all \(x, y \in P\),
+then we call \(P\) a \vocab{lattice}.
+If \(\bigwedge S\) and \(\bigvee S\) exists for all \(S \subseteq P\),
+then we call \(P\) a \vocab{complete lattice}.
+An example of an incomplete lattice is the integers,
+but we can ``complete'' it by adding the elements \(- \infty\) and \(\infty\).
+
+The greatest element of \(P\) (if it exists) is called \vocab{top} (\(\top\)).
+The least element of \(P\) (if it exists) is called \vocab{bottom} (\(\bot\)).
+
+A set \(S \subseteq P\) is a \vocab{chain} if for all \(x, y \in S\),
+either \(y \leq x\) or \(x \leq y\).
+
+Given two lattices \(L\) and \(Q\),
+we can construct the \vocab{product lattice} easily:
+\[
+  (l_1, q_1) \sqsubseteq (l_2, q_2) \iff
+    l_1 \sqsubseteq l_2 \land q_1 \sqsubseteq q_2.
+\]
+This construction easily extends to an arbitrary number of lattices.
+
+\subsection{Lattice of predicates}
+Recall our program
+\begin{minted}{text}
+{true}
+y=0;
+while(x<10){
+  x = x+1;
+  y = y+2;
+}
+{even(y)}
+\end{minted}
+Consider the predicates \(\set{\top, \textsf{even}, \textsf{odd}, \bot}\),
+where \(\top\) means that the argument is even \emph{or} odd.
+Then this forms a lattice, and we can take the product lattice with itself:
+\(\angles{x = \textsf{even}, y = \textsf{odd}} \sqsubseteq
+    \angles{x = \top, y = \textsf{odd}}\).
+
+Now we can find a greatest fixpoint solution as long as
+\(F(P) = \operatorname{wpc}(c, P) \land \textsf{postcondition}\),
+is monotonic in our lattice,
+i.e.\ \(x \sqsubseteq y \implies F(x) \sqsubseteq F(y)\).
+
+For instance, let \(x_\bot\) be the least fixed point of \(f \colon L \to L\).
+Then let \(x_0 = \bot\) and \(x_i = f(x_{i-1})\).
+By induction, \(x_i \sqsubseteq x_\bot\).
+Moreover, the chain \(x_i\) is ascending.
+If \(L\) has no infinite ascending chains, then eventually \(x_i = x_\bot\).
+
+We can do the same rick with the greatest fixed point
+if we start with \(x_0 = \top\).
+
+In our problem, we have
+\begin{align*}
+  F(P) &= \operatorname{wpc}(c, P) \land \textsf{postcondition} \\
+  P_0  &= \angles{x = \top, y = \top}                           \\
+  P_1  &= \angles{x = \top, y = \textsf{even}}                  \\
+  P_2  &= \angles{x = \top, y = \textsf{even}},
+\end{align*}
+which gives us a fixed point, which is a valid loop invariant.
+
+\begin{theorem}[Knaster-Tarski]
+  Let \(L\) be complete and
+  \(f \colon L \to L\) be an order preserving function.
+  Then the set of fixed points of \(f\) in \(L\) is also a complete lattice.
+\end{theorem}
+
+For if statements, we have a similar relaxed rule
+\[
+  \prftree
+    {\vdash \hoare{A \land b}{c_1}{B}}
+    {\vdash \hoare{A \land \pnot b}{c_2}{B}}
+    {\vdash \hoare{A}{\pifthenelse{b}{c_1}{c_2}}{B}}
+  \implies
+  \prftree
+    {\vdash \hoare{A}{c_1}{B}}
+    {\vdash \hoare{A}{c_2}{B}}
+    {\vdash \hoare{A}{\pifthenelse{b}{c_1}{c_2}}{B}}
+\]
+
+\TODO[]
+
+
+
+
+
+
+
+
+\end{document}

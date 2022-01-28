@@ -14,7 +14,7 @@ Big step operational semantics models the execution in an abstract machine.
         The configuration typically includes the program as well as any state.
   \item There are \vocab{inference rules},
         which describe how to derive judgements for an arbitrary program.
-        These are sometimes called deriviation rules or evaluation rules.
+        These are sometimes called derivation rules or evaluation rules.
 \end{itemize}
 
 \begin{example}
@@ -24,7 +24,7 @@ Big step operational semantics models the execution in an abstract machine.
     \prfaxiom{\angles{\lambda x. e} \to \lambda x. e} \qquad
     \prftree{\angles{e_1} \to \lambda x. e_1'}
             {\angles{e_1'[e_2 / x]} \to e_3}
-            {\angles{\lambda x. e} \to \lambda x. e} \qquad
+            {\angles{e_1 e_2} \to e_3} \qquad
     \prftree{\angles{e_1} \to x}
             {\angles{e_1 e_2} \to x e_2} \qquad
     \prftree{\angles{e_1} \to e_a e_b}
@@ -35,8 +35,8 @@ Big step operational semantics models the execution in an abstract machine.
     \prfaxiom{\angles{x} \to x} \qquad
     \prfaxiom{\angles{\lambda x. e} \to \lambda x. e} \qquad
     \prftree{\angles{e_1} \to \lambda x. e_1'}
-            {\angles{e_2 \to e_3} \to e_3}
-            {\angles{e_1'[e_2 / x]} \to e_2'}
+            {\angles{e_2} \to e_2'}
+            {\angles{e_1'[e_2' / x]} \to e_3}
             {\angles{e_1 e_2} \to e_3}\\
     \prftree{\angles{e_1} \to x}
             {\angles{e_2} \to e_2'}

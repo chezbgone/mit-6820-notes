@@ -1,0 +1,514 @@
+\documentclass[class=scrartcl]{standalone}
+\usepackage{chez}
+
+\begin{document}
+\subsection{Type classes}
+Hindley-Milner gives us generic functions that
+make no assumptions about the type, like
+\begin{minted}{haskell}
+const :: forall a b. a -> b -> a
+const x y = x
+
+const :: forall a b. (a -> b) -> a -> b
+apply f x = f x
+\end{minted}
+
+However, what if we \emph{do} need to make assumptions about the types?
+For instance, if we have the list data type (written two ways for clarity):
+\begin{minted}{haskell}
+data List x = Nil | Cons x (List x)
+data [x] = [] | x:[x]
+\end{minted}
+we can then write a sum function (with an accumulator)
+\begin{minted}{haskell}
+sum n [] = n
+sum n (x:xs) = sum (n + x) xs
+\end{minted}
+The type of \mintinline{haskell}{sum}
+cannot be \texttt{a -> [a] -> a}
+because we have a restriction on the type
+(namely that we need to be able to add \texttt{a}s).
+
+The solution to this is to pass in the notion of plus:
+\begin{minted}{haskell}
+sum plus n [] = n
+sum plus n (x:xs) = sum (plus n x) xs
+\end{minted}
+Now we have a polymorphic type for sum
+\mintinline{haskell}{sum :: (a -> a -> a) -> a -> [a] -> a} % chktex 26
+When we want to call \mintinline{haskell}{sum},
+we have to pass in the appropriate function representing addition.
+
+If we want to write other functions like \mintinline{haskell}{sum},
+we also need to use arithmetic operations.
+We can generalize if we include a set of functions
+\(\set{+, -, \times, \obelus}\).
+In particular, we can create a ``class'' type:
+\begin{minted}{haskell}
+data (Num a) = Num {
+  (+) :: a -> a -> a
+  (-) :: a -> a -> a
+  (*) :: a -> a -> a
+  (/) :: a -> a -> a
+  fromInteger :: Integer -> a
+}
+\end{minted}
+Then we can use this group of functions to represent restrictions on type:
+\begin{minted}{haskell}
+sum       :: Num a -> a -> [a] -> a
+matrixMul :: Num a -> Mat a -> Mat a -> Mat a
+dft       :: Num a -> Vec a -> Vec a -> Vec a
+\end{minted}
+Then, all of the numeric aspects of the type
+can be isolated to the \mintinline{haskell}{Num} type.
+For each type that has properties of a number,
+we can build a \mintinline{haskell}{Num} instance
+and functions that need to use properties of a number
+will take it as an argument.
+
+We can use the same idea to encompass other ideas,
+like equality, ordering, and conversion to/from \mintinline{haskell}{String}.
+
+However, this is slightly annoying when
+we have to manually pass in \mintinline{haskell}{Num} objects.
+We have to keep track of the \mintinline{haskell}{Num} objects,
+and make sure that our \mintinline{haskell}{Num}
+instances are consistent with each other
+(e.g.\ \mintinline{haskell}{Num a} and \mintinline{haskell}{Num (Mat a)}
+ are related to each other in a reasonable way.)
+The way we solve this is we move class objects into a type class.
+
+\begin{definition}
+  A \vocab{type class} is a group of related functions
+  that are overloaded over types.
+\end{definition}
+
+We can define the typeclass
+\begin{minted}{haskell}
+class Num a where
+  (+), (-), (*) :: a -> a -> a
+  negate        :: a -> a
+  ...
+\end{minted}
+and then define instances:
+\begin{minted}{haskell}
+instance Num Int where
+  x + y = integer_add x y
+  x - y = integer_sub x y
+  ...
+
+instance Num Float where
+  ...
+\end{minted}
+
+We can also define hierarchical data types:
+\begin{minted}{haskell}
+class Eq a where
+  (==), (/=) :: a -> a -> Bool
+
+class (Eq a) => (Ord a) where
+  (<), (<=), (>=), (>) :: a -> a -> Bool
+  max, min             :: a -> a -> a
+\end{minted}
+Here, \mintinline{haskell}{Eq} is a superclass of \mintinline{haskell}{Ord},
+so every instance of \mintinline{haskell}{Ord} is
+also an instance of \mintinline{haskell}{Eq}.
+
+Each type class corresponds to one ``concept'' and class constraints
+gives a natural hierarchy on type classes.
+Often, a type class has laws that are associated with it.
+For instance, in \mintinline{haskell}{Num},
+the function \mintinline{haskell}{(+)} should be associative and commutative.
+These aren't checked by the compiler, so the programmer has to ensure that
+every instance follows these laws.
+
+If we view type classes as predicates,
+the type checked can deal with all of the passing
+that we had to manually do before.
+Note that while this looks like a new feature,
+the compiler desugars this into pure \(\lambda\)-calculus.
+
+\subsection{Subtyping}
+When working with lambda calculus,
+we may notice that it can be annoyingly rigid.
+For instance, \((\plambda{r \of \braces{x \of \pint}}{r[x]})\braces{x=0, y=1}\)
+seems well-behaved, but is not well typed,
+since the argument has type \(\braces{x \of \pint, y \of \pint}\)
+while the function accepts type \(\braces{x \of \pint}\).
+The goal of subtyping is to refine the typing rules so that
+they accept terms like the one above.
+
+If we have some operator \(\bbrackets{\cdot}\) where
+\(\bbrackets{\tau}\) represents a set that represents \(\tau\), we have
+e.g.\ \(\bbrackets{\pint} = \ZZ\) and \(\bbrackets{\textsf{float}} = \RR\).
+Then we may try to define \(\tau_1 \leq \tau_2\) if and only if
+\(\bbrackets{\tau_1} \subseteq \bbrackets{\tau_2}\).
+A more useful rule is that \(\tau_1 \leq \tau_2\) if,
+we can use a \(\tau_1\) everywhere we can use a \(\tau_2\).
+For instance, any integer \(N\) can be treated as
+a real with no loss of meaning.
+
+The typing rule for this, called \vocab{subsumption}, is
+\[
+  \prftree{\Gamma \vdash e \of \tau'}
+          {\tau' \leq \tau}
+          {\Gamma \vdash e \of \tau}
+\]
+
+To determine the pairs of subtypes, we can provide a list to the compiler.
+However, there is a better way to come up with the subtyping rules
+that does not require the user to explicitly declare them.
+A \vocab{structural subtyping} system includes rules
+that can analyze the structure of types to deduce subtyping rules,
+rather than just using the rules that the user explicitly defined.
+
+\subsubsection{Product types}
+Consider the product type \(\tau_1 \times \tau_2\).
+\[
+  \prftree{\tau_1 \leq \tau_1'}
+          {\tau_2 \leq \tau_2'}
+          {\tau_1 \times \tau_2 \leq \tau_1' \times \tau_2'}
+\]
+We say that the product type constructor is \vocab{covariant}.
+
+\subsubsection{Record types}
+A more general type is a record type
+\(\set{a_1 \of \tau_1, \dots, a_N \of \tau_N}\),
+where for every \(i\), there is a field \(a_i\) of type \(\tau_i\).
+
+Then there are two types of subtyping:
+\[
+  \set{a \of \textsf{Int}, b \of \textsf{Alice}}
+    \leq \set{a \of \textsf{Number}, b \of \textsf{Person}},
+\]
+called depth subtyping, and
+\[
+  \set{a \of \textsf{Number}, b \of \textsf{Person}, c \of \textsf{Tool}}
+    \leq \set{a \of \textsf{Number}, b \of \textsf{Person}},
+\]
+called width subtyping.
+
+We can formalize these into the typing rules:
+\[
+  \prftree[r]{depth}
+          {\forall i. \tau_i \leq \tau_i'}
+          {\set{a_i \of \tau_i} \leq \set{a_i \of \tau_i'}}
+  \qquad \qquad
+  \prftree[r]{width}
+          {\forall j. \exists i. a_i = a_j' \land \tau_i \leq \tau_j'}
+          {\set{a_i \of \tau_i} \leq \set{a_j \of \tau_j'}}
+\]
+
+\subsubsection{Function types}
+For function types \(\tau_1 \to \tau_2\),
+we could optimistically guess
+\[
+  \prftree{\tau_1 \leq \tau_1'}
+          {\tau_2 \leq \tau_2'}
+          {\tau_1 \to \tau_2 \leq \tau_1' \to \tau_2'}
+\]
+However, we cannot use a \(\pint \to \pint\) anywhere we can use a
+\(\textsf{float} \to \pint\), as our subtype function cannot take all
+of the inputs that the original function could.
+The fix to this is to switch the subtyping direction of the input type.
+\[
+  \prftree{\tau_1 \geq \tau_1'}
+          {\tau_2 \leq \tau_2'}
+          {\tau_1 \to \tau_2 \leq \tau_1' \to \tau_2'}
+\]
+We say that the function type is \vocab{contravariant} in the domain
+and covariant in the codomain.
+
+\subsubsection{Array and list types}
+For for \emph{mutable} arrays \(\tau[]\),
+the operations we can perform on them are
+both reading or writing to some entry of the array.
+There are two possible options for a typing rule if we were to have one,
+a covariant and contravariant rule, which are respectively:
+\[
+  \prftree{\tau_1 \leq \tau_2}
+          {\tau_1[] \leq \tau_2[]} \qquad
+  \prftree{\tau_1 \geq \tau_2}
+          {\tau_1[] \leq \tau_2[]}
+\]
+In the covariant case, note that we cannot
+write a \(\tau_2\) into a \(\tau_1[]\),
+and in the contravariant case, we cannot
+read a \(\tau_2\) from a \(\tau_1[]\).
+Therefore, arrays cannot be subtyped.
+For this reason, we call arrays \vocab{invariant}.
+
+For \emph{immutable} lists \([\tau]\), we have
+\[
+  \prftree{\tau_1 \geq \tau_2}
+          {[\tau_1] \leq [\tau_2]}
+\]
+In general, most ``data structures'' are covariant.
+
+
+\section{Monads}
+These notes contain a different explanation of monads
+than what was presented in lecture.
+I personally believe that this explanation is a better introduction.
+Explanations inspired by:
+\url{https://mightybyte.github.io/monad-challenges/}
+
+
+\subsection{Maybe monad}
+Suppose we have some functions that may fail:
+Recall the \mintinline{haskell}{Maybe a} type in Haskell:
+\begin{minted}{haskell}
+data Maybe a = Nothing | Just a
+\end{minted}
+Suppose we have the functions
+\begin{minted}{haskell}
+tailMaybe :: [a] -> Maybe [a]
+tailMaybe [] = Nothing
+tailMaybe (x:xs) = Just xs
+
+maximumMaybe :: Ord a => [a] -> Maybe a
+maximumMaybe [] = Nothing
+maximumMaybe xs = Just $ foldl1 max xs
+
+reciprocalMaybe :: (Eq a, Fractional a) => a -> Maybe a
+reciprocalMaybe 0 = Nothing
+reciprocalMaybe n = Just $ 1/n
+\end{minted}
+and we want to compose these.
+The standard way to do this is
+to case match on each result like so:
+\begin{minted}{haskell}
+f :: (Ord a, Fractional a) => [a] -> Maybe a
+f xs =
+  case tailMaybe xs of
+    Nothing -> Nothing
+    Just ys -> case maximumMaybe ys of
+                 Nothing -> Nothing
+                 Just m  -> reciprocalMaybe m
+\end{minted}
+However, this gets annoying once we have a lot of functions.
+We can abstract over this:
+We define a function to facilitate this composition
+\begin{minted}{haskell}
+bind :: Maybe a -> (a -> Maybe b) -> Maybe b
+bind Nothing _ = Nothing
+bind (Just a) f = f a
+\end{minted}
+Then, we can rewrite our function
+\begin{minted}{haskell}
+f :: (Ord a, Fractional a) => [a] -> Maybe a
+f xs = bind (bind (tailMaybe xs) maximumMaybe) reciprocalMaybe
+\end{minted}
+If we define another function to ``inject''
+a value into the \mintinline{haskell}{Maybe} context,
+we can use \mintinline{haskell}{bind} with infix notation:
+\begin{minted}{haskell}
+pure x = Just x   :: a -> Maybe a
+(>>=) = bind      :: Maybe a -> (a -> Maybe b) -> Maybe b
+
+f :: (Ord a, Fractional a) => [a] -> Maybe a
+f xs = pure xs >>= tailMaybe >>= maximumMaybe >>= reciprocalMaybe
+\end{minted}
+
+\subsection{Writer monad}
+Suppose we have some functions
+\begin{minted}{haskell}
+plusOne x = x + 1
+square x = x * x
+\end{minted}
+that we wanted to augment by letting them append to a log.
+One idea we may think of is to also return a string that we can look at:
+\begin{minted}{haskell}
+plusOne' x = (x + 1, "added one")
+square' x = (x * x, "squared")
+\end{minted}
+However, this breaks compositionality, because
+\mintinline{haskell}{plusOne' (square' x)}
+does not typecheck like
+\mintinline{haskell}{plusOne (square x)}
+does.
+In particular, composition becomes really annoying:
+\begin{minted}{haskell}
+let (y, s) = square' x
+    (z, t) = plusOne' y
+ in (z, s ++ t)
+\end{minted}
+
+We can abstract over this like we did for \mintinline{haskell}{Maybe}.
+We define a function to facilitate this composition:
+\begin{minted}{haskell}
+bind :: (a, String) -> (a -> (b, String)) -> (b, String)
+bind (x, y) f = let (u, v) = f x in (u, y ++ v)
+(>>=) = bind
+\end{minted}
+Then, we can write \mintinline{haskell}{square' x >>= plusOne'}.
+Like before, we can also define
+\begin{minted}{haskell}
+pure :: Int -> (Int, String)
+pure x = (x, "")
+\end{minted}
+
+\subsection{Generalized monads}
+This idea of ``passing along computation'' seems pretty useful.
+We can make a typeclass for this!
+\begin{minted}{haskell}
+class Monad m where
+  (>>=) :: m a -> (a -> m b) -> m b
+  pure :: a -> m a
+\end{minted}
+
+This typeclass actually appears in many other places!
+Some instances include
+\mintinline{haskell}{Either a b},
+\mintinline{haskell}{[a]}, and
+\mintinline{haskell}{((->) a b)}.
+
+\subsubsection{Monad laws}
+Note that the type \mintinline{haskell}{Monad m => a -> m b}
+is almost like a function, but it returns something in the monadic context.
+However, since we have \mintinline{haskell}{(>>=)}, we can
+collapse two layers of the monad into one layer with a function
+\begin{minted}{haskell}
+join :: Monad m => m (m a) -> m a
+join mma = do ma <- mma; ma
+join mma = mma >>= id
+\end{minted}
+We can also define a function that is \emph{almost} function composition,
+but instead of functions, we work with values of type
+\mintinline{haskell}{Monad m => a -> m b}.
+These are called \vocab{Kleisli arrows}.
+\begin{minted}{haskell}
+(.)   ::            (b ->   c) -> (a ->   b) -> (a ->   c)
+(<=<) :: Monad m => (b -> m c) -> (a -> m b) -> (a -> m c)
+(f <=< g) a = g a >>= f
+\end{minted}
+
+Then, we have the monad laws:
+\begin{minted}{haskell}
+-- Left identity
+pure <=< f = f
+-- Right identity
+f <=< pure = f
+-- Associativity
+(f <=< g) <=< h = f <=< (g <=< h)
+\end{minted}
+A more confusing way to write these with the standard function
+\mintinline{haskell}{(>>=)} are:
+\begin{minted}{haskell}
+-- Left identity
+pure a >>= f = f a
+-- Right identity
+m >>= pure = m
+-- Associativity
+m >>= (\x -> f x >>= g) = (m >>= f) >>= g
+\end{minted}
+
+\subsubsection{Syntactic sugar (do notation)}
+In Haskell, there is syntactic sugar for monads,
+which allows us to think about them more easily.
+\begin{minted}{haskell}
+do e                       =>  e
+do p <- e ; statements     =>  e >>= \p -> do statements
+do e ; statements          =>  e >>= \_ -> do statements
+do let p = e ; statements  =>  let p = e in do statements
+\end{minted}
+Here, the \mintinline{haskell}{<-} can be intuitively thought
+of as ``extracting'' the value from the monad,
+but eventually we must always have a result still within the monad.
+
+\begin{example}
+  To rewrite the examples from before, we can rewrite
+  \begin{minted}[linenos=false]{haskell}
+f :: (Ord a, Fractional a) => [a] -> Maybe a
+f xs = pure xs >>= tailMaybe >>= maximumMaybe >>= reciprocalMaybe
+
+f xs = do
+  t <- tailMaybe xs
+  m <- maximumMaybe t
+  reciprocalMaybe m
+  \end{minted}
+\end{example}
+
+
+\subsection{IO monad}
+So far, we've only been writing pure functions.
+But in order for our programs to be useful,
+we want to be able to perform side effects, like printing to console.
+The way we do this is with a monad called \mintinline{haskell}{IO}.
+All side effects will be isolated in this monad,
+so that we still get the benefits of pure functions elsewhere.
+
+Let's say that we have a function
+\mintinline{haskell}{wc :: String -> (Int, Int, Int)}, % chktex 26
+and we want to write a program that takes in a file
+and prints the result to \mintinline{text}{stdout}.
+We expect there to be types and functions to help us do IO:\@
+\begin{minted}{haskell}
+type Filepath = String
+data IOMode = ReadMode | WriteMode | ...
+data Handle = ... -- implemented as built-in type
+
+openFile :: FilePath -> IOMode -> Handle
+hClose   :: Handle -> ()
+hIsEOF   :: Handle -> Bool
+hGetChar :: Handle -> Char
+\end{minted}
+
+However, these are not pure, so when we try to write code,
+there is no way to model or control side effects.
+\begin{minted}{haskell}
+getFileContents :: String -> String
+getFileContents filename =
+  let h = openFile filename ReadMode
+      readFromHandle handle =
+        if hIsEOF handle
+          then ""
+          else hGetChar handle : readFromHandle handle
+        --                            [???]
+      content = readFromHandle h
+      () = hClose h
+   in content
+\end{minted}
+
+The solution to this is wrap things with an IO monad,
+to force there to be a single sequence of IO operations,
+eliminating nondeterminism issues.
+\begin{minted}{haskell}
+openFile :: FilePath -> IOMode -> IO Handle
+hClose   :: Handle -> IO ()
+hIsEOF   :: Handle -> IO Bool
+hGetChar :: Handle -> IO Char
+\end{minted}
+Then, our function becomes
+\begin{minted}{haskell}
+readFromHandle :: Handle -> IO String
+readFromHandle h = do
+  isEOF <- hIsEOF h
+  if isEOF
+    then pure ""
+    else do x <- hGetChar h
+            rest <- readFromHandle h
+            -- base case should close handle
+            pure $ x : rest
+  
+getFileContents :: String -> IO String
+getFileContents = do
+  h <- openFile filename ReadMode
+  content <- readFromHandle h
+  hClose h
+  return content -- equivalently, `pure content`
+\end{minted}
+
+
+
+
+
+
+
+
+
+
+
+
+
+\end{document}

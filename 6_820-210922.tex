@@ -84,16 +84,17 @@ corresponding to the inference rules:
           {\lcalcname{eval}(\lcalcname{Plus} e_2\, e_2, n_1 + n_2)}
 \]
 To prove \(\forall e \in \texttt{E}, n \in \texttt{N}.
-           \texttt{eval}(e, n) \implies P(n)\),
+           \texttt{eval}(e, n) \implies P(e, n)\),
 \begin{itemize}[nosep]
   \item Prove \(P(\lcalcname{Const} n, n)\).
   \item Assume \(P(e_1, n_1)\) and \(P(e_2, n_2)\).
         Prove \(P(\lcalcname{Plus} e_1\, e_2, n_1 + n_2)\).
 \end{itemize}
-One possible \(P\) we may use here is if we have some interperter,
+One possible \(P\) we may use here is if we have some interpreter,
 and \(P(e, n)\) is the proposition that interpreting \(e\) gives \(n\).
 
 
+\chapter{Type Theory}
 \section{Type systems}
 When programming, we want to know which programs are valid.
 In particular, we want to determine which programs have semantics.
@@ -148,9 +149,9 @@ that lets us check a specific property of interest for a program.
 In particular, they can even deal with information flow violations,
 deadlocks, and more.
 
-We write \(e : T\) to represent
+We write \(e \of T\) to represent
 a \vocab{value} (or \vocab{object}) \(e\) of \vocab{type} \(T\).
-When \(x : \tau\), then only operations that
+When \(x \of \tau\), then only operations that
 are appropriate on \(\tau\) may be performed on \(x\).
 We say that a program is \vocab{type correct} if
 it never performs a wrong operation on an object.
@@ -166,7 +167,7 @@ Note that just because a language has types does not mean it has type safe:
   \item In Pascal, there is variant records and files.
   \item In C/C++, there are pointers and type casting.
 \end{itemize}
-However, Java, Ada, ML, Go, Haskell, Bluespec, etc.\ are typesafe.
+However, Java, Ada, ML, Go, Haskell, Bluespec, etc.\ are type-safe.
 
 \paragraph{Type declaration and inference}
 In modern languages, we can get all of the benefits of types without
@@ -202,7 +203,7 @@ and follow the Hindley-Milner type system.
 
 \subsection{Formal definition}
 A type system of a language is almost never orthogonal
-to the semantics of a langage, as the types might affect
+to the semantics of a language, as the types might affect
 the behavior of the language (e.g.\ operator overloading).
 When we define a typed language, we need
 \begin{itemize}[nosep]
@@ -214,11 +215,11 @@ When we define a typed language, we need
 \end{itemize}
 
 In the language, the type system assigns types to elements.
-For example, \(5 : \texttt{Int}\)
-and \(\texttt{"Hello"} : \texttt{String}\). % chktex 18
+For example, \(5 \of \texttt{Int}\)
+and \(\texttt{"Hello"} \of \texttt{String}\). % chktex 18
 However, the types of some elements (like \texttt{x})
 depends on the environment.
-We denote this by \(\Gamma \vdash e : T\).
+We denote this by \(\Gamma \vdash e \of T\).
 The \(\Gamma\) is the environment,
 and we call the entire statement a \vocab{judgement}.
 
@@ -229,27 +230,27 @@ in big step operational semantics.
 \begin{example}
   For the language of expressions, the typing judgements are
   \[
-    \prftree{x : T \in \Gamma}
-            {\Gamma \vdash x : T} \qquad
-    \prfaxiom{\Gamma \vdash N : \pint} \qquad
-    \prftree{\Gamma \vdash e_1 : \pint}
-            {\Gamma \vdash e_2 : \pint}
-            {\Gamma \vdash e_1 + e_2 : \pint}
+    \prftree{x \of T \in \Gamma}
+            {\Gamma \vdash x \of T} \qquad
+    \prfaxiom{\Gamma \vdash N \of \pint} \qquad
+    \prftree{\Gamma \vdash e_1 \of \pint}
+            {\Gamma \vdash e_2 \of \pint}
+            {\Gamma \vdash e_1 + e_2 \of \pint}
   \]
   where \(x\) is a variable, and \(N\) is an integer in the language.
 
-  If we want to prove \(x : \pint, y : \pint \vdash
-                        x + (y + 5) : \pint\),
+  If we want to prove \(x \of \pint, y \of \pint \vdash
+                        x + (y + 5) \of \pint\),
   we have the proof tree
   \[
-    \prftree{\prftree{x : \pint \in \Gamma}
-                     {\Gamma \vdash x : \pint}}
-            {\prftree{\prftree{x : \pint \in \Gamma}
-                              {\Gamma \vdash y : \pint}}
-                     {\prfaxiom{\Gamma \vdash 5 : \pint}}
-                     {\Gamma \vdash (y + 5) : \pint}}
-            {\underbracket{x : \pint, y : \pint}_\Gamma
-             \vdash x + (y + 5) : \pint}
+    \prftree{\prftree{x \of \pint \in \Gamma}
+                     {\Gamma \vdash x \of \pint}}
+            {\prftree{\prftree{x \of \pint \in \Gamma}
+                              {\Gamma \vdash y \of \pint}}
+                     {\prfaxiom{\Gamma \vdash 5 \of \pint}}
+                     {\Gamma \vdash (y + 5) \of \pint}}
+            {\underbracket{x \of \pint, y \of \pint}_\Gamma
+             \vdash x + (y + 5) \of \pint}
   \]
 \end{example}
 
@@ -257,75 +258,78 @@ in big step operational semantics.
             calculus (\texorpdfstring{\(F_1\)}{F1})}
 We can introduce typing rules into lambda calculus:
 \[
-  \prftree{x : \tau \in \Gamma}
-          {\Gamma \vdash x : \tau} \qquad
-  \prftree{(\Gamma, x : \tau_1) \vdash e : \tau_2}
-          {\Gamma \vdash (\lambda x: \tau_1. e) : \tau_1 \to \tau_2} \qquad
-  \prftree{\Gamma \vdash e_1 : \tau' \to \tau}
-          {\Gamma \vdash e_2 : \tau'}
-          {\Gamma \vdash e_1 e_2 : \tau}
+  \prftree{x \of \tau \in \Gamma}
+          {\Gamma \vdash x \of \tau} \qquad
+  \prftree{(\Gamma, x \of \tau_1) \vdash e \of \tau_2}
+          {\Gamma \vdash (\lambda x\of \tau_1. e) \of \tau_1 \to \tau_2} \qquad
+  \prftree{\Gamma \vdash e_1 \of \tau' \to \tau}
+          {\Gamma \vdash e_2 \of \tau'}
+          {\Gamma \vdash e_1 e_2 \of \tau}
 \]
 Note that when we have a lambda, we must specify the type of the input
-as we did in \(\lambda x : \tau_1. e\).
+as we did in \(\lambda x \of \tau_1. e\).
 
 The second typing rule states that if we want to prove
-a lambda \(\lambda x : \tau_1. e\) has type \(\tau_1 \to \tau_2\),
-then we must show that \(e : t_2\) in the original context \(\Gamma\)
-with the additional information that \(x : \tau_1\).
+a lambda \(\lambda x \of \tau_1. e\) has type \(\tau_1 \to \tau_2\),
+then we must show that \(e \of t_2\) in the original context \(\Gamma\)
+with the additional information that \(x \of \tau_1\).
 Note that if \(\Gamma\) has a type for \(x\) already,
-then in \((\Gamma, x : \tau_1)\) it is replaced with
-the new information \(x : \tau_1\).
+then in \((\Gamma, x \of \tau_1)\) it is replaced with
+the new information \(x \of \tau_1\).
 
 The third typing rule states that
-if \(e_1 : \tau' \to \tau\) and \(e_2 : \tau'\) in some context,
-then \(e_1 e_2 : \tau\) in that context.
+if \(e_1 \of \tau' \to \tau\) and \(e_2 \of \tau'\) in some context,
+then \(e_1 e_2 \of \tau\) in that context.
 
 We also include a few more rules
 \[
-  \prfaxiom{\Gamma \vdash N : \pint} \qquad
-  \prftree{\Gamma \vdash e_1 : \pint}
-          {\Gamma \vdash e_2 : \pint}
-          {\Gamma \vdash e_1 + e_2 : \pint} \qquad
-  \prftree{\Gamma \vdash e_1 : \pint}
-          {\Gamma \vdash e_2 : \pint}
-          {\Gamma \vdash e_1 = e_2 : \pbool} \qquad
-  \prftree{\Gamma \vdash e : \pbool}
-          {\Gamma \vdash e_t : \tau}
-          {\Gamma \vdash e_f : \tau}
-          {\Gamma \vdash \pifthenelse{e}{e_t}{e_f} : \tau}
+  \prfaxiom{\Gamma \vdash N \of \pint} \qquad
+  \prftree{\Gamma \vdash e_1 \of \pint}
+          {\Gamma \vdash e_2 \of \pint}
+          {\Gamma \vdash e_1 + e_2 \of \pint} \qquad
+  \prftree{\Gamma \vdash e_1 \of \pint}
+          {\Gamma \vdash e_2 \of \pint}
+          {\Gamma \vdash e_1 = e_2 \of \pbool} \qquad
+  \prftree{\Gamma \vdash e \of \pbool}
+          {\Gamma \vdash e_t \of \tau}
+          {\Gamma \vdash e_f \of \tau}
+          {\Gamma \vdash \pifthenelse{e}{e_t}{e_f} \of \tau}
 \]
 
 \begin{example}
   If we wanted to prove
   \[
-    \vdash (\lambda x: \pbool. \lambda y:\pbool. \pifthenelse{x}{y}{y+1})
-             : \pbool \to \pint \to \pint,
+    \vdash (\lambda x \of \pbool. \lambda y \of\pbool. \pifthenelse{x}{y}{y+1})
+             \of \pbool \to \pint \to \pint,
   \]
   where nothing to the left of \(\vdash\) is the empty context,
   then we have the proof tree
   \[
     \prftree
     {\prftree
-     {\prftree{\prftree{x : \pbool \in y: \pint, x : \pbool}
-                       {y: \pint, x : \pbool \vdash x : \pbool}}
-              {\prftree{y : \pint \in y: \pint, x : \pbool}
-                       {y: \pint, x : \pbool \vdash y : \pint}}
-              {\prftree{\prftree{y : \pint \in y: \pint, x : \pbool}
-                                {y: \pint, x : \pbool \vdash y : \pint}}
-                       {\prfaxiom{y: \pint, x : \pbool \vdash 1 : \pint}}
-                       {y: \pint, x : \pbool \vdash y+1 : \pint}}
-              {y: \pint, x : \pbool \vdash \pifthenelse{x}{y}{y+1} : \pint}}
-     {x : \pbool \vdash
-       (\lambda y: \pint.
+     {\prftree{\prftree{x \of \pbool \in y \of \pint, x \of \pbool}
+                       {y \of \pint, x \of \pbool \vdash x \of \pbool}}
+              {\prftree{y \of \pint \in y \of \pint, x \of \pbool}
+                       {y \of \pint, x \of \pbool \vdash y \of \pint}}
+              {\prftree{\prftree{y \of \pint \in y \of \pint, x \of \pbool}
+                                {y \of \pint, x \of \pbool \vdash y \of \pint}}
+                       {\prfaxiom{y \of \pint, x \of \pbool \vdash 1 \of \pint}}
+                       {y \of \pint, x \of \pbool \vdash y+1 \of \pint}}
+              {y \of \pint, x \of \pbool \vdash \pifthenelse{x}{y}{y+1} \of \pint}}
+     {x \of \pbool \vdash
+       (\lambda y \of \pint.
           \pifthenelse{x}{y}{y+1})
-       : \pint \to \pint}}
-    {\vdash (\lambda x: \pbool.
-               \lambda y: \pint.
+       \of \pint \to \pint}}
+    {\vdash (\lambda x \of \pbool.
+               \lambda y \of \pint.
                  \pifthenelse{x}{y}{y+1})
-            : \pbool \to \pint \to \pint}
+            \of \pbool \to \pint \to \pint}
   \]
 \end{example}
 
+This is a really strong type system on \(\lambda\)-calculus.
+It turns out that this is so strong that we can't
+write non-terminating computation.
 
 
 \end{document}

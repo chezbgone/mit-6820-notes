@@ -1,0 +1,134 @@
+\documentclass[class=scrartcl]{standalone}
+\usepackage{chez}
+
+\begin{document}
+\section{Modeling the Heap}
+Suppose we want to model the heap for separation logic.
+
+\subsection{Heap as array}
+One strategy we may use is to model the heap as an array.
+If we have a C-style language with new expressions
+\(\pname{malloc}(n)\) and \(*e\),
+and new statements \(*e \coloneqq e\),
+then we can think of the heap as a large array.
+
+\begin{multicols}{2}
+\begin{minted}{c}
+x = malloc(2);
+*x = 4;
+*(x+1) = z;
+y = *(x) + *(x+1);
+{y == 4 + z}
+\end{minted}
+\columnbreak
+\begin{minted}{c}
+x = HEAP_PTR;
+HEAP_PTR = HEAP_PTR + 2;
+HEAP[x] = 4;
+HEAP[x+1] = z;
+y = HEAP[x] + HEAP[x+1];
+{y == 4 + z}
+\end{minted}
+\end{multicols}
+
+This requires no new machinery, and is very general.
+We can even model deallocation by keeping an extra
+array that keeps track of whether a position in the heap is allocated.
+\begin{multicols}{2}
+\begin{minted}{c}
+x = malloc(2);
+*x = 4;
+*(x+1) = z;
+y = *(x) + *(x+1);
+free(x);
+{y == 4 + z}
+\end{minted}
+\columnbreak
+\begin{minted}{c}
+x = HEAP_PTR;
+LIVE[x] = true;
+LIVE[x+1] = true;
+SIZE[x] = 2;
+HEAP_PTR = HEAP_PTR + 2;
+HEAP[x] = 4;
+Assert LIVE[x];
+HEAP[x+1] = z;
+Assert LIVE[x+1];
+y = HEAP[x] + HEAP[x+1];
+Assert LIVE[x] && LIVE[x+1];
+Assert LIVE[x];
+for (i=0; i<size[x]; ++i) {
+  Assert LIVE[x+i];
+  LIVE[x+i] = false;
+}
+{y == 4 + z}
+\end{minted}
+\end{multicols}
+
+If we want to verify code that manipulates the heap,
+like the following function that sums the value in a linked list:
+\begin{minted}{c}
+t = 0;
+while (x != null) {
+  t = t + *x;
+  x = *(x+1);
+}
+\end{minted}
+Here \(x\) points to a list of the form
+\(\pname{List}\braces{{\pname{val}} \of \pint, {\pname{next}} \of \pname{List}}\).
+It turns out to be extremely hard
+to come up with an invariant for the loop.
+It turns out that this method is not entirely useless,
+as we can perform loop unrolling.
+However, doing so sacrifices soundness.
+
+\subsection{Heap separation logic}
+In this method, the key idea is to break the heap into disjoint pieces,
+allowing us to focus on individual pieces of the heap at a time.
+
+\TODO[describe language]
+
+Then, heaps are described by predicates in the following language:
+\begin{itemize}
+  \item \(\textsf{emp} \coloneqq \text{the heap is empty}\).
+  \item \(x \mapsto y \coloneqq
+            \text{the heap has one cell at location \(x\) storing \(y\)}\).
+  \item \(A * B \coloneqq
+            \text{the heap can be partitioned into disjoint regions,
+                  one where \(A\) is true, and one where \(B\) is true}\).
+\end{itemize}
+
+\begin{example}
+  If we have \((x \mapsto y) * (y \mapsto z)\),
+  then we know that \(x\) maps to \(y\) and \(y\) maps to \(z\).
+  Moreover, we have the implicit assumption
+  that \(x \neq y\) since the regions are disjoint.
+\end{example}
+
+More formally,
+\TODO[copy predicates]
+\begin{align*}
+  s, h \vDash B
+    &\iff \bbrackets{B}s = \ptrue \\
+  s, h \vDash E \mapsto F
+    &\iff \set{\bbrackets{E}s} = \operatorname{dom}(h)
+            \land h(\bbrackets{E}s) = \bbrackets{F}s \\
+  s, h \vDash \pfalse
+    &\iff \text{never} \\
+  s, h \vDash P \Rightarrow Q
+    &\iff ((s, h \vdash P) \Rightarrow (s, h \vdash Q)) \\
+  s, h \vDash \forall x.\, P
+    &\iff (\forall v \in \ZZ.\, [s \mid x \mapsto v], h \vDash P) \\
+  s, h \vDash \textsf{emp}
+    &\iff h = [] \\
+  s, h \vDash P * Q
+    &\iff \exists h_0 h_1.\,
+                    (h_0 \# h_1)
+                      \land (h_0 * h_1 = h)
+                      \land (s, h_0 \vDash P)
+                      \land (s, h_1 \vDash Q).
+\end{align*}
+
+
+
+\end{document}

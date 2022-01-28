@@ -1,0 +1,228 @@
+\documentclass[class=scrartcl]{standalone}
+\usepackage{chez}
+
+
+\begin{document}
+\NewDocumentCommand{\ulsf}{m}{\underline{\textsf{\smash[b]{#1}}}}
+
+\section{Types for information flow}
+Reference: Myers, A. C. ``JFlow: practical mostly-static information flow control''. In POPL `99
+
+Normally when people talk about type systems in imperative programming,
+where evaluation involves updating a store of values,
+standard types place a restriction on the program store
+and what operations you can use on the values.
+
+Another common feature of imperative languages is public and public variables,
+which restricts operations in contexts where they do not apply.
+More generally, these are called information flow properties.
+We say that code has \vocab{confidentiality} if private information
+is not leaked to public values.
+Conversely, we say that code has \vocab{integrity}
+if public values do not have control over
+the internal state of private values.
+
+\begin{example}[Confidentiality]
+  If we have a private class (in Python, e.g.) \mintinline{python}{Passwords}
+  and a public class \mintinline{python}{Wikipedia},
+  then the following code is not confidential:
+  \begin{minted}[linenos=false]{python}
+pws: Passwords = Passwords()
+wiki: Wikipedia = Wikipedia()
+
+wiki.add_entry(str(pws))
+  \end{minted}
+  However, not all information flow violations are as explicit.
+  If we see the statement \mintinline{python}{wiki.write("YES")},
+  we may think that it does not leak information,
+  but in the right context, it actually does leak information:
+  \begin{minted}[linenos=false]{python}
+if len(pws.get_password()) == 10:
+  wiki.write("YES")
+  \end{minted}
+  There are even more ambiguous situations:
+  \begin{minted}[linenos=false]{python}
+p = pws.get_password()
+if q: wiki.write("YES")
+  \end{minted}
+  If \mintinline{python}{p} and \mintinline{python}{q} are
+  related to each other, then information gets leaks.
+\end{example}
+
+\begin{example}[Integrity]
+  This code does not have integrity:
+  \begin{minted}{python}
+class Passwords:
+  change_password(self):
+    self.password = wiki.entry[:10]
+  \end{minted}
+\end{example}
+
+One may think that a solution would just to not have these
+pieces of code interacting with each other at all,
+but there are other use cases that have similar requirements.
+For instance, a medical program may deal with many patients,
+and we want to make sure there is no information flow between each
+individual patient.
+Another example is a browser, where we do not want information
+from the saved passwords file to be leaked other than
+a few specific situations in which the user allows it to.
+
+More formally, if we have a program \(P\) that has both
+public (\(L\)) and private (\(H\)) inputs and outputs,
+Then for all \(L_i, H_i, H_i'\),
+then \(F(L_i, H_i) = (L_o, H_o) \implies F(L_i, H_i') = (L_o, H_o')\),
+i.e.\ changing the private input will not change the public output.
+Note that we cannot determine this from a single execution of the program.
+Because of this, it turns out our type based approach will work fairly well.
+
+\subsection{Strategy}
+We will first define a checkable property that implies
+that information flow is secure.
+Note that this may be stronger than what we actually need,
+e.g.\ a program may be insecure in an unreachable branch,
+but we will still reject the program.
+
+This property will be defined with a \emph{dynamic} labeling scheme.
+We will attach a label to every private value,
+and then we will propagate it to other values that use it.
+This turns a global property about executions with all possible inputs
+to a local property.
+
+\begin{example}
+  If \(x\) has a private label, and we have \(z = a \cdot x\),
+  then we make \(z\) also have a private label.
+  Note that even if there is no information flow (like when \(a = 0\)),
+  \(z\) will still have the label.
+
+  It turns out that \(\textsf{NaN} \cdot 0 = \textsf{NaN}\),
+  so it pays to be conservative in some of these cases.
+\end{example}
+
+We then will define a \emph{static} type system that allows us to
+approximate the set of labels that values can have.
+
+\subsection{Labels}
+Before, our examples just had
+one high confidentiality channel and one public channel.
+In more complicated programs, there are often different private channels,
+so we need a scheme that supports this.
+
+We have principals, representing users or other identities,
+such as groups or roles.
+We then define a \emph{policy} to be
+  a principal called the \emph{owner}, and a set
+  containing principals called the \emph{readers}.
+Policies will be of the form \textsf{Owner: (reader1, reader2, reader3)}.
+Then, a label will be a set of policies.
+The reason why we want owners is so that
+permissions are able to change in the future
+if an owner wants to update it.
+
+Note that there is a partial ordering on these labels.
+In particular, we write \(L_1 \leq L_2\)
+if \(L_2\) is more restrictive than \(L_1\).
+Note that this is slightly counterintuitive,
+because \(L_2\) actually has fewer readers than \(L_1\).
+This partial order forms a \vocab{lattice}, meaning
+\begin{itemize}[nosep]
+  \item we can take the least upper bound (\(\sqcup\)) of two elements,
+  \item there exists a least fixed point
+  \item there exists a minimum element, called bottom.
+\end{itemize}
+
+This partial order is similar to subtyping:
+if a variable is trusted to handle a value with an \(L_2\) label,
+then it is also trusted to handle a value with a label of \(L_1\).
+
+\begin{example}
+  \begin{gather*}
+    \set{A: (B, C)} \leq \set{A: (B)} \\
+    \set{A: (B, C), C: (B)} \leq \set{A: (B, C), C: (B)} \\
+    \set{A: (B), C: (B)} \geq \set{A: (B, C)}
+  \end{gather*}
+  where the last one is because on the right side,
+  \(C\) does not have any privacy concerns,
+  i.e.\ it allows everything.
+\end{example}
+
+Now when we have some assignment \mintinline{text}|x{L2} := v{L1}|,
+it is valid only if \mintinline{text}{L1 <= L2},
+i.e.\ the variable being assigned to is more restrictive.
+When we have a binary operation like \mintinline{text}|x{L1} + y{L2}|,
+then the result has label \(L_1 \sqcup L_2\).
+However, if we consider the following code:
+\begin{minted}{Java}
+int{A: everyone} a, b, c;
+int{A: A} p;
+c = 0;
+if (p) { c = a + b; }
+\end{minted}
+Note that the information leaked into \mintinline{text}{c} is actually
+given by the label of \mintinline{text}{p},
+not just the join of the two labels.
+The solution to this is to also consider the program counter PC.
+In particular, we need to keep track of the information leaked
+from knowing that the program is at a certain position.
+Therefore, as we run the program, we also label the PC.
+
+\subsection{Type system for information flow}
+Our basic judgements will be of the form \(A \vdash E \of X\).
+Here, the type environment \(A\) will carry a lot more information.
+In particular, it will have information about the program counter.
+Additionally, the type \(X\) will be a map containing several values:
+\begin{itemize}[nosep]
+  \item \(X[\ulsf{nv}]\) will be the label of \(E\)
+        if it terminates normally.
+  \item \(X[\ulsf{n}]\) will be the label that will be leaked if
+        execution terminated after evaluating this expression.
+\end{itemize}
+We have the following rules:
+\begin{gather*}
+  \prfaxiom{A \vdash \textsf{literal} \of
+                       X_\nullset[ \ulsf{n} \coloneqq A[\ulsf{pc}]
+                                 , \ulsf{nv} \coloneqq A[\ulsf{pc} ]]} \\[0.5ex]
+  \prfaxiom{A \vdash
+            \pskip \of X_\nullset[ \ulsf{n} \coloneqq A[\ulsf{pc} ]]} \\[0.5ex]
+  \prftree{A[v] = \angles{ \textrm{var}
+                        \, [\textrm{final}]
+                        \, \tau\set{L}
+                        \, \textit{uid}} }
+          {X = X_\nullset[ \ulsf{n} \coloneqq A[\ulsf{pc}]
+                         , \ulsf{nv} \coloneqq L \sqcup A[\ulsf{pc}]
+          ]}
+          {A \vdash v \of X} \\
+  \prftree{A \vdash E \of X}
+          {A[v] = \angles{ \textrm{var}
+                        \, \tau\set{L}
+                        \, \textit{uid} }}
+          {A \vdash X[\ulsf{nv}] \sqsubseteq L}
+          {A \vdash v = E \of X} \\
+  \prftree{A \vdash E \of X_E}
+          {A[\ulsf{pc} \coloneqq X_E[\ulsf{nv}]] \vdash S_1 \of X_1}
+          {A[\ulsf{pc} \coloneqq X_E[\ulsf{nv}]] \vdash S_2 \of X_2}
+          {X = X_E[\ulsf{n} \coloneqq \underline{\nullset}]
+               \oplus X_1 \oplus X_2}
+          {A \vdash \pifthenelse{E}{S_1}{S_2} \of X} \\
+  \prftree{A \vdash S_1 \of X_1}
+          {\operatorname{extend}(A, S_1)[\ulsf{pc} \coloneqq X_1[\ulsf{n}]]
+             \vdash S_2 \of X_2}
+          {X = X_1[\ulsf{n} \coloneqq \underline{\nullset}] \oplus X_2}
+          {A \vdash S_1; S_2 \of X}
+\end{gather*}
+\TODO[]
+The first two rules are:
+\begin{itemize}[nosep]
+  \item If the expression is a literal, then the only information leaked
+        is the program counter at that point.
+  \item If the expression is a literal, then the only information leaked
+        is the program counter at that point.
+\end{itemize}
+
+
+
+
+
+
+
+\end{document}

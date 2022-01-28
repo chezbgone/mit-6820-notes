@@ -1,0 +1,116 @@
+\documentclass[class=scrartcl]{standalone}
+\usepackage{chez}
+
+\begin{document}
+
+
+
+\section{Verification}
+The Hoare triple we want to prove is
+\begin{minted}[highlightlines={1,10}]{c}
+{x=x0, y=y0}
+if (x > y) {
+  t = x - y;
+  while (t > 0) {
+    x = x - 1;
+    y = y + 1;
+    t = t - 1;
+  }
+}
+{x0 > y0 => y=x0 and x=y0}
+\end{minted}
+To prove this, we have the rule
+\[
+  \prftree{\hoare{x = x_0 \land y = y_0 \land x > y}
+                 {P}
+                 {x_0 > y_0 \Rightarrow y = x_0 \land x = y_0}
+          }
+          {\hoare{x = x_0 \land y = y_0 \land x \leq y}
+                 {\pskip}
+                 {x_0 > y_0 \Rightarrow y = x_0 \land x = y_0}
+          }
+          {\hoare{x = x_0 \land y = y_0}
+                 {\pifthenelse{x > y}{P}{\pskip}}
+                 {x_0 > y_0 \Rightarrow y = x_0 \land x = y_0}}
+\]
+The right premise is proved by using the rule
+\[
+  \prfaxiom{\hoare{A}{\pskip}{A}}
+\]
+To prove the left, we have the rule
+\[
+  \prftree[r]{\scriptsize (A)}
+          {\hoare{x = x_0 \land y = y_0 \land x > y}
+                 {t = x - y}
+                 {C}}
+          {\hoare{C}
+                 {\pwhiledo{t > 0}{P_2}}
+                 {x_0 > y_0 \Rightarrow y = x_0 \land x = y_0}}
+          {\hoare{x = x_0 \land y = y_0 \land x > y}
+                 {t = x - y;
+                  \pwhiledo{t > 0}{P_2}}
+                 {x_0 > y_0 \Rightarrow y = x_0 \land x = y_0}}
+\]
+The big question in program verification is what \(C\) should be.
+If we think about it a bit, we may notice that we have throughout the loop,
+we have \(x_0 = y + t\) and \(y_0 = x - t\).
+Therefore, we choose \(C = (t \geq 0 \land y + t = x_0 \land x - t = y_0)\).
+Therefore, to deduct the left of (A), we have
+\[
+  \prftree
+  {\prfaxiom{
+     \hoare{x - y \geq 0 \land y + (x - y) = x_0 \land x - (x - y) = y_0}
+           {t = x - y}
+           {t \geq 0 \land y + t = x_0 \land x - t = y_0}
+     }
+  }
+  {\hoare{x = x_0 \land y = y_0 \land x > y}
+                 {t = x - y}
+                 {x_0 > y_0 \Rightarrow y = x_0 \land x = y_0}}
+\]
+where the first line is from the assignment rule,
+and the second line is from the rule of consequence.
+
+A more general strategy is to construct a \vocab{rank function} \(F\)
+that has these properties:
+\begin{itemize}[nosep]
+  \item <++>
+\end{itemize}
+In our example, we would choose \(F = t\).
+
+
+To mechanize this strategy, we will use the idea of weakest preconditions.
+Note that we still need to manually select the invariant.
+We define the \vocab{weakest precondition} \(\wpc(c, A) = P\)
+to be the weakest predicate \(P\) such that \(\vdash \hoare{P}{c}{A}\).
+The idea is \TODO[]
+We have
+\begin{align*}
+  \wpc(\pskip, Q) &= Q \\
+  \wpc(x = e, Q) &= Q[x \to e] \\
+  \wpc(c_1; c_2, Q) &= \wpc(c_1, \wpc(c_2, Q)) \\
+  \wpc(\pifthenelse{b}{c_1}{c_2}, Q)
+    &= (b \lor \wpc(c_1, Q))
+       \land (\pnot b \lor \wpc(c_2, Q))
+\end{align*}
+However, when we want to work with loops, this does not work well.
+We can get around this by using a \vocab{verification condition},
+which is stronger than the weakest precondition.
+In particular, we define
+\[
+  \operatorname{VC}(\pwhiledo{e}{c}, B)
+    = I \land \forall x_1 \dots x_n. I
+        \Rightarrow (e \Rightarrow \operatorname{VC}(c, I)
+                       \land \pnot e \Rightarrow B),
+\]
+where \(x_i\) are the variables modified in \(c\).
+
+
+
+
+
+
+
+
+
+\end{document}

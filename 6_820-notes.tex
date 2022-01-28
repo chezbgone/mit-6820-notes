@@ -2,13 +2,28 @@
 \usepackage{standalone}
 \usepackage[code]{chez}
 \usepackage{prftree}
+\usepackage{tikz-qtree}
+\usepackage{multicol}
 
 \NewDocumentCommand{\lcalcname}{m}{\operatorname{\textsf{#1}}}
+\NewDocumentCommand{\of}{}{{\hspace{0.1111em}:\hspace{0.1111em}}}
 \NewDocumentCommand{\pname}{m}{\operatorname{\textsf{#1}}}
+\NewDocumentCommand{\plambda}{m m}{\lambda{#1}\operatorname{.}{#2}}
+\NewDocumentCommand{\ptrue}{}{\textsf{true}}
+\NewDocumentCommand{\pfalse}{}{\textsf{false}}
 \NewDocumentCommand{\pbool}{}{\textsf{bool}}
 \NewDocumentCommand{\pint}{}{\textsf{int}}
-\NewDocumentCommand{\pifthenelse}{m m m}{\pname{if}#1\pname{then}#2\pname{else}#3}
-\NewDocumentCommand{\of}{}{\mathbin{:}}
+\NewDocumentCommand{\punit}{}{\textsf{unit}}
+\NewDocumentCommand{\pnot}{}{\pname{not}}
+\NewDocumentCommand{\pref}{}{\pname{ref}}
+\NewDocumentCommand{\pskip}{}{\textsf{skip}}
+\NewDocumentCommand{\pifthenelse}{m m m}{\pname{if}{#1}\pname{then}{#2}\pname{else}{#3}}
+\NewDocumentCommand{\pwhiledo}{m m}{\pname{while}{#1}\pname{do}{#2}}
+\NewDocumentCommand{\pletin}{m m}{\pname{let}{#1}\pname{in}{#2}}
+\NewDocumentCommand{\pheapin}{m m}{\pname{heap}{#1}\pname{in}{#2}}
+\NewDocumentCommand{\hoare}{m m m}{\textcolor{chezgreen}{\braces{#1}}{#2}\textcolor{chezgreen}{\braces{#3}}}
+\NewDocumentCommand{\thoare}{m m m}{\textcolor{chezgreen}{\brackets{#1}}{#2}\textcolor{chezgreen}{\brackets{#3}}}
+\NewDocumentCommand{\wpc}{}{\operatorname{\textsf{wpc}}}
 \newmintinline[icoq]{coq}{}
 
 \setlength{\prfinterspace}{1.2em}
@@ -21,12 +36,28 @@
 \maketitle
 \setcounter{tocdepth}{2}
 \tableofcontents
+\newpage
 
 \input{6_820-210908}
 \input{6_820-210913}
 \input{6_820-210915}
 \input{6_820-210920}
 \input{6_820-210922}
+\input{6_820-210927}
+\input{6_820-210929}
+\input{6_820-211004}
+\input{6_820-211006}
+\input{6_820-211013}
+\input{6_820-211018} % <--
+% \input{6_820-211020}
+% \input{6_820-211025}
+% \input{6_820-211027}
+% \input{6_820-211101}
+% \input{6_820-211103}
+% \input{6_820-211110}
+% \input{6_820-211115}
+% \input{6_820-211117}
+% \input{6_820-211122}
 % insert here
 
 \end{document}

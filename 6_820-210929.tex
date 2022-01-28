@@ -1,0 +1,287 @@
+\documentclass[class=scrartcl]{standalone}
+\usepackage{chez}
+
+\begin{document}
+\begin{question}
+  How do we formalize this process?
+\end{question}
+
+\subsection{Constraints}
+First, we will formalize what a contraint actually is,
+talk about how to generate them.
+
+Consider the language of constraints:
+\[
+  C := \tau_1 = \tau_2 \mid C \lor C
+                       \mid \exists \tau. C
+\]
+We can build constraints from the typing rules
+as we build the type checking tree.
+The base cases are
+\[
+  \bbrackets{\Gamma \vdash x \of \tau} = (\Gamma(x) = \tau) \qquad
+  \bbrackets{\Gamma \vdash N \of \tau} = (\pint = \tau).
+\]
+The inductive cases are
+\begin{gather*}
+  \bbrackets{\Gamma \vdash e_1 e_2 \of \tau}
+    = \exists a (\bbrackets{\Gamma \vdash e_1 \of a \to \tau} \land
+                 \bbrackets{\Gamma \vdash e_2 \of a}) \\
+  \bbrackets{\Gamma \vdash \lambda x. e \of \tau}
+    = \exists a_1 a_2. (\bbrackets{\Gamma, x \of a_1 \vdash e \of a_2} \land
+                         \tau = a_1 \to a_2) \\
+  \bbrackets{\Gamma \vdash e_1 + e_2 \of \tau}
+    = \exists a_1 a_2. (\bbrackets{\Gamma \vdash e_1 \of \pint} \land
+                        \bbrackets{\Gamma \vdash e_2 \of \pint} \land
+                        \tau = \pint)
+\end{gather*}
+
+\begin{example}
+  Suppose we want to determine the type of
+  \[
+    \lambda x. x + 1.
+  \]
+  We can recursively evaluate the type judgement
+  \begin{align*}
+    \bbrackets{\Gamma \vdash (\plambda{x}{x+1}) 2 \of \tau}
+      &= \exists a_1.\,
+        \textcolor{chezblue}{
+          \bbrackets{\Gamma \vdash (\plambda{x}{x+1}) \of a_1 \to \tau}} \land
+        \textcolor{chezgreen}{\bbrackets{\Gamma \vdash 2 \of a_1}} \\
+      &= \exists a_1.\,
+        \textcolor{chezblue}{(\exists a_2 a_3.\,
+          \textcolor{chezpurple}{
+            \bbrackets{\Gamma, x \of a_2 \vdash x + 1 \of a_3}} \land
+          (a_1 \to \tau = a_2 \to a_3)
+        )} \land
+        \textcolor{chezgreen}{(a_1 = \pint)} \\
+      &= \exists a_1.\,
+        \textcolor{chezblue}{(\exists a_2 a_3.\,
+          \textcolor{chezpurple}{
+            \bbrackets{\Gamma, x \of a_2 \vdash x \of \pint} \land
+            \bbrackets{\Gamma, x \of a_2 \vdash 1 \of \pint} \land
+            (a_3 = \pint)
+          } \land
+          (a_1 \to \tau = a_2 \to a_3)
+        )} \land
+        \textcolor{chezgreen}{(a_1 = \pint)} \\
+      &= \exists a_1.\,
+        \textcolor{chezblue}{(\exists a_2 a_3.\,
+          \textcolor{chezpurple}{
+            (a_2 = \pint) \land
+            (\pint = \pint) \land
+            (a_3 = \pint)
+          } \land
+          (a_1 \to \tau = a_2 \to a_3)
+        )} \land
+        \textcolor{chezgreen}{(a_1 = \pint)}.
+  \end{align*}
+  and this gives us an expression in the language of constraints.
+\end{example}
+
+Now that we have constraints,
+we want to determine if they are equal, and
+whether they can be satisfied with
+an appropriate choice of type variables.
+
+To answer the first question,
+to determine when two types \(\tau_a\) and \(\tau_b\) are equal,
+we use \vocab{structural equality}.
+In particular, \(\tau_a = \tau_b\) when their constructors are the same,
+and their contents are the same.
+For instance, if \(\tau_a = \tau_1 \to \tau_2\) and
+                 \(\tau_b = \tau_3 \to \tau_4\),
+then \(\tau_a = \tau_b \iff \tau_1 = \tau_3 \land \tau_2 = \tau_4\).
+
+\subsection{Unification}
+The answer to the question of how to solve constraints is more complicated.
+We define \vocab{unification} to be the process of determining
+whether two types can be made equal by selecting appropriate
+substitutions for type variables.
+
+First we will formally define types and type substitution.
+The language of \vocab{types} is
+\begin{alignat*}{4}
+  \tau :={} & \iota && \qquad
+    \text{base types
+          (\mintinline{haskell}{Int}, \mintinline{haskell}{Bool}, \dots)} \\
+  \mid{} & t && \qquad\text{type variables} \\
+  \mid{} & \tau_1 \to \tau_2 && \qquad\text{function types}.
+\end{alignat*}
+A \vocab{type substitution} is a map
+\begin{align*}
+  S \colon& \set{\text{type variables}} \to \set{\text{types}} \\[-1ex]
+  S ={}& [\tau_1/t_1, \tau_2/t_2, \dots, \tau_n/t_n],
+\end{align*}
+and when \(\tau' = S \tau\),
+we say \(\tau'\) is a \vocab{substitution instance} of \(\tau\).
+
+\begin{example}
+  If we have \(S_1 = [(t \to \pbool) / t_1]\) and \(S_2 = [\pint / t]\), then
+  \begin{align*}
+    S_2 S_1 (t_1 \to t_1) &= S_2 ((t \to \pbool) \to (t \to \pbool)) \\
+      &= (\pint \to \pbool) \to (\pint \to \pbool).
+  \end{align*}
+\end{example}
+
+To determine whether two types are able to be unified,
+we use the following algorithm:
+\begin{minted}[escapeinside=||]{haskell}
+unify(|\(\tau_1\)|, |\(\tau_2\)|) =
+  case (|\(\tau_1\)|, |\(\tau_2\)|) of
+    |\((\tau_1, t_2\))| -> |\([\tau_1/t_2]\)| given |\(t_2 \notin FV(\tau_1)\)|
+    |\((t_1, \tau_2\))| -> |\([\tau_2/t_1]\)| given |\(t_1 \notin FV(\tau_2)\)|
+    |\((\iota_1, \iota_2\))| -> if (eq |\(\iota_1\)| |\(\iota_2\)|) then []
+                          else Fail
+    |\((\tau_{11} \to \tau_{12}, \tau_{21} \to \tau_{22}\))| -> let |\(S_1 = {}\)|unify|\((\tau_{11}, \tau_{21})\)|
+                              |\(S_2 = {}\)|unify|\((S_1 \tau_{12}, S_1 \tau_{22})\)|
+                          in |\(S_2 S_1\)|
+    otherwise -> Fail
+\end{minted}
+
+\subsection{Putting it together}
+Now that we have formalized both constraints and unification,
+we can combine them into a type inference algorithm.
+In the examples above (e.g.\ \cref{ex:type-inference}),
+we collected all of the constraints,
+and then at the end we solved the system.
+However in practice, this can be inefficient if your program is large,
+so we often solve the constraints incrementally,
+and build the substitution map incrementally.
+
+Let us come up with an inference algorithm \(W\) such that
+\(W(\textrm{TE}, e) = (S, \tau)\), where \(S(\textrm{TE}) \vdash e \of \tau\).
+Here, we are writing \(\textrm{TE}\) instead of \(\Gamma\) for convenience.
+Intuitively, the type environment \(\textrm{TE}\) stores
+  the most general type of each identifier while
+the substitution \(S\) stores the changes in type variables.
+
+Naturally, we will do casework on \(e\). We have
+\begin{gather*}
+  \bbrackets{\Gamma \vdash N \of \tau} = (\pint = \tau) \qquad
+    \bbrackets{\Gamma \vdash x \of \tau} = (\Gamma(x) = \tau) \\
+  \bbrackets{\Gamma \vdash e_1 e_2 \of \tau}
+    = \exists a (\bbrackets{\Gamma \vdash e_1 \of a \to \tau} \land
+                 \bbrackets{\Gamma \vdash e_2 \of a}) \\
+  \bbrackets{\Gamma \vdash \lambda x. e \of \tau}
+    = \exists a_1 a_2. (\bbrackets{\Gamma, x \of a_1 \vdash e \of a_2} \land
+                         \tau = a_1 \to a_2).
+\end{gather*}
+This gives us the algorithm
+\begin{minted}[escapeinside=||]{haskell}
+w(te, e) = case e of
+  c    -> ({}, Int)
+  x    -> if (x |\(\in\)| te) then ({}, te[x])
+                      else Fail
+  |\(\lambda\)|x.e -> let (|\(S_1\)|, |\(\tau_1\)|) = w(te |\(\union\)| {x:u}, e)
+           in (|\(S_1\)|, |\(S_1\)|(u) -> |\(\tau_1\)|)
+  |\(e_1 e_2\)|  -> let (|\(S_1\)|, |\(\tau_1\)|) = w(te, |\(e_1\)|)
+              (|\(S_2\)|, |\(\tau_2\)|) = w(|\(S_1\)|(te), |\(e_2\)|)
+              |\(S_3\)| = unify(|\(S_2\)|(|\(\tau_1\)|), |\(\tau_2\)| -> u)
+           in (|\(S_3 S_2 S_1\)|, |\(S_3\)|(u))
+\end{minted}
+
+\begin{example}
+  We can even run this algorithm by hand:
+  Let's say we are trying to compute
+  \(W(\nullset, (\plambda{f}{f 5})(\plambda{x}{x}))\).
+  \begin{adhoctheorem*}{Computation}[Application]
+    Let \((S_1, \tau_1) = W(\nullset, \plambda{f}{f 5})
+                        = (S_1', S_1'(u_1) \to \tau_1')
+                        = ([\pint \to u_2 / u_1], (\pint \to u_2) \to u_2)\),
+    with subvariables obtained from the following subcomputation:
+    \begin{adhoctheorem*}{Computation}[Lambda]
+      Let \((S_1', \tau_1') = W(\nullset \union \set{f \of u_1}, f 5)
+                            = (S_3'' S_2'' S_1'', S_3'' u_2)
+                            = ([\pint \to u_2 / u_1], u_2)\)
+      with subvariables obtained from the subcomputation:
+      \begin{adhoctheorem*}{Computation}[Application]
+        Let \((S_1'', \tau_1'') = W(\set{f \of u_1}, f) = (\nullset, u_1)\).
+
+        Let \((S_2'', \tau_2'') = W(\set{f \of u_1}, 5) = (\nullset, \pint)\).
+
+        Let \(\begin{aligned}[t]
+            S_3'' &= \pname{unify}(S_2''(u_1), \pint \to u_2) \\[-1ex]
+                  &= \pname{unify}(u_1, \pint \to u_2) \\[-1ex]
+                  &= [\pint \to u_2 / u_1]
+          \end{aligned}\).
+      \end{adhoctheorem*}
+    \end{adhoctheorem*}
+
+    Let \((S_2, \tau_2) = W(S_1' \nullset, \plambda{x}{x})
+                        = (S_1', S_1'(u_3) \to \tau_1')
+                        = (\nullset, u_3 \to u_3)\),
+    with subvariables obtained from the subcomputation:
+    \begin{adhoctheorem*}{Computation}[Lambda]
+      Let \((S_1', \tau_1') = W(\nullset \union \set{x \of u_3}, x)
+                            = (\nullset, u_3).\)
+    \end{adhoctheorem*}
+
+    Let \(S_3 = \pname{unify}(S_2(\tau_1), \tau_2 \to u_4)
+              = \pname{unify}((\pint \to u_2) \to u_2, (u_3 \to u_3) \to u_4)
+              = S_2' S_1'
+              = [ \pint / u_2
+                , \pint / u_3
+                , \pint / u_4
+                ]\),
+    with subvariables obtained from the subcomputation:
+    \begin{adhoctheorem*}{Computation}[Unify]
+      Let \(S_1' = \pname{unify}(\pint \to u_2, u_3 \to u_3)
+                 = S_2'' S_1''
+                 = [ \pint / u_2
+                   , \pint / u_3
+                   ]\),
+      with subvariables obtained from:
+      \begin{adhoctheorem*}{Computation}[Unify]
+        Let \(S_1'' = \pname{unify}(\pint, u_3)
+                    = [\pint / u_3]\).
+
+        Let \(S_2'' = \pname{unify}(S_1'' u_2, S_1'' u_3)
+                    = \pname{unify}(u_2, \pint)
+                    = [\pint / u_2]\).
+      \end{adhoctheorem*}
+
+      Let \(S_2' = \pname{unify}(S_1' u_2, S_1' u_4)
+                 = \pname{unify}(\pint, u_4)
+                 = [\pint / u_4]\)
+    \end{adhoctheorem*}
+  \end{adhoctheorem*}
+  
+  This gives \(W(\nullset, (\plambda{f}{f 5})(\plambda{x}{x}))
+                 = (S_3 S_2 S_1, S_3 u_4)
+                 = ([ \pint / u_1
+                    , \pint / u_2
+                    , \pint / u_3
+                    , \pint / u_4
+                    ], \pint)\).
+\end{example}
+
+We can include the \(\pletin{\dots}{\dots}\) construct with the typing rule
+\[
+  \prftree{\Gamma, x \of \tau' \vdash e_1 \of \tau'}
+          {\Gamma, x \of \tau' \vdash e_2 \of \tau}
+          {\Gamma \vdash \pletin{x = e_1}{e_2} \of \tau}
+\]
+This gives the constraint rule
+\[
+  \bbrackets{\Gamma \vdash \pletin{x = e_1}{e_2} \of \tau}
+    = \exists \tau'. \bbrackets{\Gamma, x \of \tau' \vdash e_1 \of \tau'} \land
+                     \bbrackets{\Gamma, x \of \tau' \vdash e_2 \of \tau}.
+\]
+This gives the type inference case:
+\begin{minted}[escapeinside=||]{haskell}
+w(te, e) = case e of
+  (let |\(x = e_1\)| in |\(e_2\)|) -> let (|\(S_1\)|, |\(\tau_1\)|) = w(te |\(\union\)| {x:u}, |\(e_1\)|)
+                           |\(\,S_2\)|      = unify (|\(S_1\)(u)|, |\(\tau_1\)|)
+                           (|\(S_3\)|, |\(\tau_2\)|) = w(|\(S_2\)||\(S_1\)|(te) |\(\union\)| {x:|\(\tau_1\)|}, |\(e_2\)|)
+                        in (|\(S_3 S_2 S_1\)|, |\(\tau_2\)|)
+\end{minted}
+
+
+
+
+
+
+
+
+\end{document}

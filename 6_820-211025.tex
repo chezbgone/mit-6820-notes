@@ -1,0 +1,177 @@
+\documentclass[class=scrartcl]{standalone}
+\usepackage{chez}
+
+\begin{document}
+\chapter{Program Logics}
+Consider the following program:
+\begin{minted}{c}
+if (x > y) {
+  t = x - y;
+  while (t > 0) {
+    x = x - 1;
+    y = y + 1;
+    t = t - 1;
+  }
+}
+\end{minted}
+We claim that for all \(x\) and \(y\),
+\begin{itemize}[nosep]
+  \item the loop will terminate, and
+  \item if \(x > y\), at the end, \(x\) and \(y\) will be swapped
+        (i.e.\ \(y\) will be the larger of the two).
+\end{itemize}
+It turns out that the tools we have seen so far are insufficient to prove this.
+
+Operational semantics gave us a way to prove that
+a given input will produce a given output,
+or to prove that all constructs of a language in a language
+will preserve some property.
+However, it does not give us a way of proving
+general properties about all inputs.
+
+Type-based reasoning allows us to
+design custom checkers to prove specific properties,
+which is good at reasoning about values that certain variables have.
+However, in this example, we want to know something
+about the state of the program at a certain point,
+which may not be true at other points,
+which type-based reasoning is not good at.
+
+\section{Axiomatic semantics}
+We introduce a system for proving properties of programs.
+The key idea is to define the semantics of constructs
+by describing its effects on assertions about the program state.
+This has two components:
+\begin{itemize}[nosep]
+  \item a language for stating assertions
+  \begin{itemize}[nosep]
+    \item This can be first order logic,
+          or a specialized logic such as separation logic.
+    \item There have been many specialized languages developed
+          over the years, e.g.\ Z, Larch, JML, Spec\#.
+  \end{itemize}
+  \item deductive rules for establishing the truth of such assertions
+\end{itemize}
+
+\subsection{History}
+In the early years, there was unbridled optimism,
+where proving software was heavily endorsed by Hoare and Dijkstra.
+In particular, if you can prove programs to be correct,
+then bugs will be a thing of the past.
+
+In the middle ages, in 1979, a paper by DeMillo, Lipton, and Perllis
+that stated that proofs in math only work because
+there is a social process in place to get people to argue about them
+and internalize them.
+On the other hand, proofs about programs are too boring
+for social processes to form around them,
+and also programs change too fast and proofs were too brittle.
+
+Then there was a renaissance in the 2000s,
+where a new generation of automated reasoning tools like Coq came out,
+so that proofs can be checked automatically,
+rather than by other people.
+There were also many other success stories,
+like Microsoft's driver verification tool.
+
+\subsection{Hoare Triples}
+A Hoare triple \(\hoare{A}{\textsf{stmt}}{B}\) is
+a precondition \(A\),
+a statement \(\textsf{stmt}\), and
+a postcondition \(A\).
+That asserts that if the precondition \(A\) holds before \textsf{stmt},
+and \textsf{stmt} terminates, then the postcondition \(B\) will hold afterward.
+This is a partial correctness assertion.
+We may write \(\thoare{A}{\textsf{stmt}}{B}\)
+to denote that \textsf{stmt} terminates.
+Note that both of these are undecidable.
+% undecidability is for the weak
+
+We will use Winskel's IMP:
+\begin{align*}
+  e &\coloneqq n
+          \mid x
+          \mid e_1 + e_2
+          \mid e_1 = e_2
+          \mid \ptrue
+          \mid \pfalse \\
+  c &\coloneqq (x \coloneqq e)
+          \mid c_1; c_2
+          \mid \pifthenelse{e}{c_1}{c_2}
+          \mid \pwhiledo{e}{c}
+          \mid \pskip
+\end{align*}
+
+We introduce a language of assertions
+\[
+  A \coloneqq \ptrue
+         \mid \pfalse
+         \mid e_1 = e_2
+         \mid e_1 \geq e_2
+         \mid 
+\]
+
+\TODO[intro grammars]
+
+Then partial correctness \(\hoare{A}{c}{B}\) can be defined as
+\[
+  \forall \sigma \, \forall \sigma'
+    (\sigma \vDash A \land \angles{c, \sigma} \to \sigma') \Rightarrow
+    \sigma' \vDash B
+\]
+Note that this is partial correctness because
+termination is in the preconditions of the implication.
+
+The power of axiomatic semantics is the ability to reach the validity
+of Hoare triples by using deduction rules.
+
+\begin{gather*}
+  \prfaxiom{\vdash \hoare{A[x \to e]}{x \coloneqq e}{A}} \qquad
+  \prftree{\vdash \hoare{A \land b}{c_1}{B}}
+          {\vdash \hoare{A \land \pnot b}{c_2}{B}}
+          {\vdash \hoare{A}{\pifthenelse{b}{c_1}{c_2}}{B}} \\
+  \prftree{\vdash \hoare{A \land b}{c}{A}}
+          {\vdash \hoare{A}{\pwhiledo{b}{c}}{A \land \pnot b}} \qquad
+  \prftree{\vdash \hoare{A}{c_1}{C}}
+          {\vdash \hoare{C}{c_2}{B}}
+          {\vdash \hoare{A}{c_1; c_2}{B}} \\
+  \prftree{\vdash A' \Rightarrow A}
+          {\vdash \hoare{A}{c}{B}}
+          {\vdash B \Rightarrow B'}
+          {\vdash \hoare{A'}{c}{B'}}
+\end{gather*}
+The last one is called the \vocab{rule of consequence}.
+\begin{itemize}
+  \item The first derivation rule states that if
+        we have an assertion \(A\) where we substitute in \(e\) for \(x\),
+        then running \(x \coloneqq e\) will make the assertion \(A\) hold.
+        For instance, we have
+        \[
+          \prfaxiom{\vdash \hoare{x + 1 > 0}{x \coloneq x + 1}{x > 0}}
+        \]
+  \item The second rule states that
+\end{itemize}
+
+
+\subsection{Soundness and completeness}
+Now that we have the rules, we want to prove that they are sound and complete.
+\begin{itemize}[nosep]
+  \item Soundness means that we will never be able to prove
+        something that is not true.
+  \item Completeness means that if a statement is true,
+        then we can deductively prove it.
+
+\end{itemize}
+
+
+
+
+
+
+
+
+
+
+
+
+\end{document}

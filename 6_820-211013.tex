@@ -1,0 +1,249 @@
+\documentclass[class=scrartcl]{standalone}
+\usepackage{chez}
+
+\begin{document}
+\chapter{Types for imperative programs}
+Recall that when evaluating lambda calculus,
+there is no state to keep track of.
+We had the following inductive definition
+\[
+  \prfaxiom{x \to x} \qquad
+  \prftree{e \to e'}
+          {\plambda{x}{e} \to \plambda{x}{e'}} \qquad
+  \prftree{e_1 \to \plambda{x}{e_1'}}
+          {e_1'[e_2/x] \to e_3}
+          {e_1 e_2 \to e_3}
+\]
+
+We want to do the same thing for imperative programs.
+Since we now have state, the configuration must now include it,
+rather than just the types of each variable.
+
+We will be using the language IMP,
+which is the imperative equivalent to lambda calculus
+in the sense that it is the simplest imperative language
+that we can add things to.
+
+\section{Introduction}
+The grammar of IMP is:
+\begin{gather*}
+  e \coloneqq n
+         \mid x
+         \mid e_1 + e_2
+         \mid e_1 == e_2
+         \mid \ptrue
+         \mid \pfalse \\
+  c \coloneqq (x \coloneqq e)
+         \mid c_1; c_2
+         \mid \pifthenelse{e}{c_1}{c_2}
+         \mid \pwhiledo{e}{c}
+         \mid \pskip
+\end{gather*}
+where \(e\) represents expressions and \(c\) represents commands.
+
+
+\subsection{Big step semantics}
+Since there is a distinction between expressions and commands,
+we now need two types of judgements:
+\begin{itemize}[nosep]
+  \item expressions that result in a value \(\angles{e, \sigma} \to n\)
+  \item commands that change the state \(\angles{c, \sigma} \to \sigma'\)
+\end{itemize}
+Here, the state \(\sigma\) is a mapping from variables to values.
+
+The rules for expressions are similar to what we had before:
+\[
+  \prfaxiom{\angles{N, \sigma} \to n} \qquad
+  \prftree{\angles{e_1, \sigma} \to n_1}
+          {\angles{e_2, \sigma} \to n_2}
+          {n = n_1 + n_2}
+          {\angles{e_2 + e_2, \sigma} \to n} \qquad
+  \prfaxiom{\angles{x, \sigma} \to \sigma(x)}
+\]
+where the third rule above is to read from variables.
+For commands, the state is changed:
+\begin{gather*}
+  \prftree{\angles{e, \sigma} \to e'}
+          {\angles{X \coloneqq e, \sigma} \to \sigma[X \to e']} \qquad
+  \prftree{\angles{c_1, \sigma} \to \sigma''}
+          {\angles{c_2, \sigma''} \to \sigma'}
+          {\angles{c_1 ; c_2, \sigma} \to \sigma'} \\
+  \prftree{\angles{e, \sigma} \to \ptrue}
+          {\angles{c_1, \sigma} \to \sigma'}
+          {\angles{\pifthenelse{e}{c_1}{c_2}, \sigma} \to \sigma'} \qquad
+  \prftree{\angles{e, \sigma} \to \pfalse}
+          {\angles{c_2, \sigma} \to \sigma'}
+          {\angles{\pifthenelse{e}{c_1}{c_2}, \sigma} \to \sigma'} \\
+  \prftree{\angles{e, \sigma} \to \pfalse}
+          {\angles{c_2, \sigma} \to \sigma}
+          {\angles{\pwhiledo{e}{c}, \sigma} \to \sigma'} \qquad
+  \prftree{\angles{e, \sigma} \to \ptrue}
+          {\angles{c, \sigma} \to \sigma''}
+          {\angles{\pwhiledo{e}{c}, \sigma''} \to \sigma'}
+          {\angles{\pwhiledo{e}{c}, \sigma} \to \sigma'}
+\end{gather*}
+For the \(\pwhiledo{\ptrue}{c}\) case, note that the last two premises
+is equivalent to the sequential composition rule.
+Therefore, the last rule is equivalent to
+\[
+  \prftree{\angles{e, \sigma} \to \ptrue}
+          {\angles{c; \pwhiledo{e}{c}, \sigma} \to \sigma'}
+          {\angles{\pwhiledo{e}{c}, \sigma} \to \sigma'}
+\]
+
+\subsection{Small step semantics}
+Recall that a redex is some rule \(r \to v\),
+and a context is an expression with some hole \(C = \bullet \mid \cdots\).
+Since we now have state, our local reductions must be of the form
+\(\angles{r, \sigma} \to \angles{v, \sigma'}\).
+Our reductions are fairly intuitive:
+\begin{itemize}
+  \item \(\angles{x, \sigma[x = n]} \to \angles{n, \sigma[x = n]}\)
+  \item \(\angles{n_1 + n_2, \sigma} \to \angles{n, \sigma}\)
+        where \(n = n_1 + n_2\).
+  \item \(\angles{x \coloneqq n, \sigma} \to \angles{\pskip, \sigma[x \gets n]}\)
+  \item \(\angles{\pskip; c, \sigma} \to \angles{c, \sigma}\)
+  \item \(\angles{\pifthenelse{\ptrue}{c_1}{c_2}, \sigma}
+          \to \angles{c_1, \sigma}\)
+  \item \(\angles{\pifthenelse{\ptrue}{c_1}{c_2}, \sigma}
+          \to \angles{c_2, \sigma}\)
+  \item \(\angles{\pwhiledo{b}{c}, \sigma}
+          \to \angles{\pifthenelse{b}{c; \pwhiledo{b}{c}}{\pskip}, \sigma}\)
+\end{itemize}
+To do global reduction, we repeatedly identify a redex
+(i.e.\ write the program as \(C[r]\) for some \(C\) and \(r\)), and reduce it.
+To do this, we need to identify the next redex,
+which defines the evaluation order.
+We define
+\[
+  H \coloneqq \bullet
+         \mid n + H
+         \mid H + e
+         \mid (x \coloneqq H)
+         \mid \pifthenelse{H}{c_1}{c_2}
+         \mid H; c
+\]
+Note that in \(e_1 + e_2\), \(e_1\) is evaluated before \(e_2\).
+In general, redexes and contexts define
+evaluation order and short circuit behavior.
+
+\begin{lemma}[Decomposition]
+  If \(c\) is not \(\pskip\), then there exists a unique \(H\) and \(r\)
+  such that \(c = H[r]\).
+\end{lemma}
+This is similar to the progress lemma we had before,
+but this time, we can guarantee determinism
+with the uniqueness of \(H\) and \(r\).
+
+
+\subsection{References}
+Many imperative programs have a heap,
+which allows us to maintain unbounded state.
+We will talk about one approach to the heap,
+which comes from the ML world.
+One thing that we have in OCaml is an explicit heap.
+In particular, we can create heap allocated objects and references them.
+However, it still tries to preserve much of what we like
+about functional languages.
+
+To add references into a \emph{functional} language,
+it helps to think about the type also.
+We modify lambda calculus like so:
+\begin{align*}
+  \tau &\coloneqq \cdots \mid \tau \pref \\
+  e    &\coloneqq \cdots \mid \pref e
+                         \mid (e_1 \coloneqq e_2)
+                         \mid e_1 ; e_2
+                         \mid {!e}
+\end{align*}
+The idea is that \(\pref e\) creates a new ref with initial value \(e\),
+and \(!e\) extracts the value from the ref.
+
+To model the heap, we have the following definition:
+\[
+  h \coloneqq \nullset \mid h, a \to (v \of \tau)
+\]
+Then, a program is a heap along with an expression,
+and heap addresses act like bound variables in expressions:
+\[
+  p = \pheapin{h}{e}
+\]
+The new contexts added to support the heap are:
+\[
+  H = \dots \mid \pref H
+            \mid (H \coloneqq e)
+            \mid (\textsf{addrs} \coloneqq H)
+            \mid {!H}
+\]
+Since the heap is a global object, there are no local reduction rules.
+We do, however, have new global reduction rules:
+\begin{itemize}[nosep]
+  \item \(\pheapin{h}{H[\pref v \of \tau]}
+          \to \pheapin{(h[a \to v \of \tau])}{H[a]}\)
+  \item \(\pheapin{h}{H[!a]} \to \pheapin{h}{H[v]}\)
+        where \(a \to v \in h\)
+  \item \(\pheapin{h}{H[a \coloneqq v]}
+          \to \pheapin{(h[a \to v] \of \tau)}{H[\punit]}\)
+\end{itemize}
+The typing rules for each of the \(\pref\) primitives are
+\[
+  \prftree{\Gamma \vdash e \of \tau}
+          {\Gamma \vdash (\pref e \of \tau) \of \tau \pref} \qquad
+  \prftree{\Gamma \vdash e \of \tau \pref}
+          {\Gamma \vdash {!e} \of \tau} \qquad
+  \prftree{\Gamma \vdash e_1 \of \tau \pref}
+          {\Gamma \vdash e_2 \of \tau}
+          {\Gamma \vdash e_1 \coloneqq e_2 \of \punit}
+\]
+
+One problem with this is how they interact with polymorphism.
+Consider the following:
+\begin{align*}
+  \pname{let}{} & x \of {\forall t. ((t \to t) \pref)}
+                    = \Lambda t. \pref (\plambda{x \of t}{x}) \\[-1ex]
+  \pname{in}{}  & \begin{lgathered}[t]
+                    x[\pbool] \coloneqq \plambda{x \of \pbool}{\pnot x} \\[-1ex]
+                    (!x[\pint])5
+                  \end{lgathered}
+\end{align*}
+The solution is to disallow side effects in \(\pname{let}\).
+
+\subsection{Typing rules}
+For imperative programs, the typing rules are not too interesting:
+\begin{gather*}
+  \prftree{x \of \tau \in \Gamma}
+          {\Gamma \vdash x \of \tau} \qquad
+  \prftree{\Gamma \vdash e_1 \of \pint}
+          {\Gamma \vdash e_2 \of \pint}
+          {\Gamma \vdash e_1 + e_2 \of \pint} \qquad
+  \prftree{\Gamma \vdash N \of \pint} \qquad
+  \prftree{\Gamma \vdash e \of \pbool}
+          {\Gamma \vdash c_1 \of \punit}
+          {\Gamma \vdash c_2 \of \punit}
+          {\Gamma \vdash \pifthenelse{e}{c_1}{c_2} \of \punit} \\
+  \prftree{\Gamma \vdash e \of \tau}
+          {\Gamma \vdash x \of \tau}
+          {\Gamma \vdash x \coloneqq e \of \punit} \qquad
+  \prftree{\Gamma \vdash e \of \pbool}
+          {\Gamma \vdash c \of \punit}
+          {\Gamma \vdash \pwhiledo{e}{c} \of \punit}
+\end{gather*}
+
+To prove progress and preservation,
+it it similar to what we did for functional programs.
+The difference is that we need to take into account the mutable state.
+More specifically, we have
+\begin{description}
+  \item [Preservation] If the mutable state is well typed,
+        then after evaluating one step it will remain well typed.
+  \item [Progress] If the mutable state is well typed,
+        then we can make progress.
+\end{description}
+
+
+
+
+
+
+
+\end{document}

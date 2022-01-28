@@ -1,0 +1,267 @@
+\documentclass[class=scrartcl]{standalone}
+\usepackage{chez}
+
+\begin{document}
+
+\section{Polymorphism}
+Under our current rules,
+\(\pletin{\pname{id} = \plambda{x}{x}}
+         {(\dots (\pname{id} \ptrue) \dots (\pname{id} 1) \dots)}\)
+is not well typed, because \(\pname{id}\) cannot be both
+\(\pint \to \pint\) and \(\pbool \to \pbool\).
+There are a few ways we can try to fix this:
+\begin{description}
+  \item [Explicit polymorphism] We introduce a type-level lambda expression,
+        formalized with the typing rules
+        \[
+          \prftree{\Gamma \vdash e \of \tau}
+                  {\Gamma \vdash \Lambda t.\, e
+                                 \of \forall t. \tau} \qquad
+          \prftree{\Gamma \vdash e \of \forall t. \tau'}
+                  {\Gamma \vdash e[\tau] \of \tau'[\tau / t]}
+        \]
+        For instance, we have \(\pname{id} = \Lambda T \operatorname{.}
+                                                     \plambda{x \of T}{x}\),
+        and when we want to use it, we write \(\pname{id}[\pint]5\).
+        However, this is annoying because we have to explicitly
+        pass in the type whenever we use it.
+  \item [Impredicative polymorphism] We allow self referential types,
+        formalized by the language of types and expressions:
+        \begin{align*}
+          \tau &\coloneqq b \mid \tau_1 \to \tau_2
+                            \mid T
+                            \mid \forall T. \tau \\
+          e    &\coloneqq x \mid \plambda{x \of \tau}{e}
+                            \mid e_1 e_2
+                            \mid \Lambda T.\, e
+                            \mid e[\tau]
+        \end{align*}
+        Note that here, we can define
+        a type variable \(t = \forall x. x \to x\),
+        where \(x\) can refer to \(t\).
+        This is powerful, but we cannot express recursion.
+        Moreover, type inference is undecidable.
+  \item [Predicative polymorphism] We restrict impredicativity to get
+        the language of types and expressions:
+        \begin{align*}
+          \tau   &\coloneqq b \mid \tau_1 \to \tau_2
+                              \mid T \\
+          \sigma &\coloneqq \tau \mid \forall T .\, \tau
+                                 \mid \sigma_1 \to \sigma_2 \\
+          e      &\coloneqq x \mid \lambda\, x \of \sigma .\, e
+                              \mid e_1 e_2
+                              \mid \Lambda T .\, e
+                              \mid e[\tau]
+        \end{align*}
+        This is still very powerful,
+        but we cannot instantiate a polymorphic type.
+        Moreover, type inference is still undecidable.
+  \item [Prenex predicative polymorphism] We restrict so that
+        all quantifiers are at the beginning.
+        This gives us the grammar
+        \begin{align*}
+          \tau   &\coloneqq b \mid \tau_1 \to \tau_2
+                              \mid T \\
+          \sigma &\coloneqq \tau \mid \forall T .\, \tau \\
+          e      &\coloneqq x \mid \lambda\, x \of \tau .\, e
+                              \mid e_1 e_2
+                              \mid \Lambda T .\, e
+                              \mid e[\tau]
+        \end{align*}
+        This makes our type inference decidable,
+        but now we cannot pass polymorphic functions as function arguments.
+\end{description}
+The compromise we will settle on is called let polymorphism.
+In particular, we introduce the expression type of the form
+\(\pletin{x = e_1}{e_2}\), which is equivalent to
+\((\plambda{x}{e_2}){e_1}\), except \(x\) can be polymorphic.
+This gives a good amount of expressiveness,
+while maintaining decidability.
+This is called the Hindley-Milner type system.
+
+
+\section{Type inference with polymorphism}
+If we have
+\(\pletin{(\pname{id} = \lambda x. x)}
+         {\dots (\pname{id} 1) \dots (\pname{id} \ptrue) \dots}\),
+we can come up with multiple constraints
+\[
+  \pname{id} \of t_1 \to t_1 \qquad
+  \pname{id} \of \pint \to t_1 \qquad
+  \pname{id} \of \pbool \to t_1,
+\]
+which do not unify.
+The solution to this is to generalize the type to
+\[
+  \pname{id} \of \forall t_1.\, t_1 \to t_1.
+\]
+Then, we can instantiate the generalized type variable
+differently in different contexts.
+\[
+  \pname{id}_1 \of \pint \to \pint \qquad
+  \pname{id}_2 \of \pbool \to \pbool,
+\]
+
+\subsection{Hindley-Milner types}
+Consider the language
+\begin{align*}
+  E \coloneqq{} & c                     && \text{constant} \\[-1ex]
+    {}\mid{}    & x                     && \text{variable} \\[-1ex]
+    {}\mid{}    & \lambda x. E          && \text{abstraction} \\[-1ex]
+    {}\mid{}    & (E_1 E_2)             && \text{application} \\[-1ex]
+    {}\mid{}    & \pletin{x = E_1}{E_2} && \text{let-block}
+\end{align*}
+Note that there are no explicit types in the language!
+All types are inferred according to the
+\vocab{Hindley-Milner type inference algorithm}.
+
+The types are
+\begin{align*}
+  \tau \coloneqq{} & \iota             && \text{base types} \\[-1ex]
+       {}\mid{}    & t                 && \text{type variables} \\[-1ex]
+       {}\mid{}    & \tau_1 \to \tau_2 && \text{function types},
+\end{align*}
+and there are type schemes
+\[
+  \sigma := \tau \mid \forall t.\, \sigma.
+\]
+Note that all of the \(\forall\)s occur at the beginning of a type scheme,
+so a type \(\tau\) cannot contain a type scheme \(\sigma\).
+
+A \vocab{type environment} is a mapping from identifiers to type schemes.
+
+A type scheme \(\sigma = \forall t_1 \dots t_n.\, \tau\)
+can be \vocab{instantiated} into a type \(\tau'\) by
+substituting types for the bound variables \(t_1, \dots, t_n\) of \(\sigma\),
+i.e.\ \(\tau' = S \tau\) for some substitution \(S\) with
+\(\operatorname{Dom}(S) \subseteq \operatorname{BV}(\sigma)\).
+We then say that \(\tau'\) is an \vocab{instance} of \(\sigma\),
+and write \(\sigma > \tau'\).
+We call \(\tau'\) a \vocab{generic instance} of \(\sigma\) if \(S\) maps
+\(t_1, \dots, t_n\) to new type variables.
+
+\begin{example}
+  If we have \(\sigma = \forall t_1.\, t_1 \to t_1\), then
+  \begin{itemize}[nosep]
+    \item \(t_3 \to t_2\) is a generic instance of \(\sigma\), and
+    \item \(\pint \to t_2\) is a non-generic instance of \(\sigma\).
+  \end{itemize}
+\end{example}
+
+We can go in the other direction.
+In particular, we can generalize types with free variables:
+\[
+  \operatorname{Gen}(\mathrm{TE}, \tau)
+    = \forall t_1 \dots t_n.\, \tau
+  \qquad \text{where} \qquad
+  \set{t_1, \dots, t_n}
+    = \operatorname{FV}(\tau) \setminus \operatorname{FV}(\mathrm{TE}).
+\]
+This captures the notion of \emph{new} type variables in \(\tau\),
+and introduces polymorphism.
+In particular, we quantify the type variables that are free in \(\tau\)
+but not in the type environment \(\mathrm{TE}\).
+
+Overall, this gives us the type inference rules:
+\begin{gather*}
+  \prftree[r]{\footnotesize (App)}
+          {\Gamma \vdash e_1 \of \tau \to \tau'}
+          {\Gamma \vdash e_2 \of \tau}
+          {\Gamma \vdash (e_1 e_2) \of \tau'} \qquad
+  \prftree[r]{\footnotesize (Abs)}
+          {\Gamma \vdash e_1 \of \tau \to \tau'}
+          {\Gamma \vdash e_2 \of \tau}
+          {\Gamma \vdash (e_1 e_2) \of \tau'} \qquad
+  \prftree[r]{\footnotesize (Var)}
+          {x \of \sigma \in \Gamma}
+          {\sigma \geq \tau}
+          {\Gamma \vdash x \of \tau} \\
+  \prftree[r]{\footnotesize (Const)}
+          {\operatorname{typeof}(c) \geq \tau}
+          {\Gamma \vdash c \of \tau} \qquad
+  \prftree[r]{\footnotesize (Let)}
+          {\Gamma; \braces{x \of \tau} \vdash e_1 \of \tau}
+          {\Gamma; \braces{x \of \operatorname{Gen}(\Gamma, \tau)}
+            \vdash e_2 \of \tau'}
+          {\Gamma \vdash (\pletin{x = e_1}{e_2}) \of \tau'}
+\end{gather*}
+
+The important rules for polymorphism is in (Var) and (Let).
+In particular, the type of a variable is generalized in the let expression,
+and then the type scheme can be specialize to different types with the Var rule.
+
+\subsection{HM Inference algorithm}
+Our type inference algorithm changes a bit to account for polymorphism,
+and we get the following:
+\begin{minted}[escapeinside=||]{haskell}
+w (te, e) = case e of
+  c    -> ({}, typeof(c))
+  x    -> if (x |\(\notin\)| te) then Fail
+                      else let |\(\forall t_1 \dots t_n.\, \tau\)| = TE[x]
+                            in ({}, |\([u_i / t_i] \tau\)|)
+  |\(\lambda\)|x.e -> let (|\(S_1\)|, |\(\tau_1\)|) = w(te |\(\union\)| {x:u}, e)
+           in (|\(S_1\)|, |\(S_1\)|(u) -> |\(\tau_1\)|)
+  |\(e_1 e_2\)|  -> let (|\(S_1\)|, |\(\tau_1\)|) = w(te, |\(e_1\)|)
+              (|\(S_2\)|, |\(\tau_2\)|) = w(|\(S_1\)|(te), |\(e_2\)|)
+              |\(S_3\)| = unify (|\(S_2\)|(|\(\tau_1\)|), |\(\tau_2\)| -> u)
+           in (|\(S_3 S_2 S_1\)|, |\(S_3\)|(u))
+  (let |\(x = e_1\)| in |\(e_2\)|) -> let (|\(S_1\)|, |\(\tau_1\)|) = w(te |\(\union\)| {x:u}, |\(e_1\)|)
+                           |\(\,S_2\)|      = unify(|\(S_1\)(u)|, |\(\tau_1\)|)
+                           |\(\,\sigma\)|       = gen(|\(S_2 S_1\)(TE)|, |\(S_2(\tau_1)\)|)
+                           (|\(S_3\)|, |\(\tau_2\)|) = w(|\(S_2\)||\(S_1\)|(te) |\(\union\)| {x:|\(\sigma\)|}, |\(e_2\)|)
+                        in (|\(S_3 S_2 S_1\)|, |\(\tau_2\)|)
+\end{minted}
+
+The only differences are in the variable case and the let case,
+where we specialize and generalize respectively.
+
+Some important observations about HM type inference:
+\begin{itemize}[nosep]
+  \item We do not generalize type variables that are used elsewhere.
+  \item Let is the only way of defining polymorphic constructs.
+  \item We generalize the types of the let bindings
+        \emph{after} processing their definitions.
+\end{itemize}
+
+HM type inference is sound and generates the most general types of expressions.
+Therefore, an inferred type is verifiable and any verifiable type is inferred.
+This complexity of HM type inference is \textsf{PSPACE}-hard,
+due to the nested let blocks.
+
+\begin{example}
+  Consider
+  \begin{minted}[linenos=false]{haskell}
+let twice f x = f (f x)
+ in twice twice succ 4
+  \end{minted}
+  and
+  \begin{minted}[linenos=false]{haskell}
+let twice f x = f (f x)
+    foo g = (g g succ) 4
+ in foo twice
+  \end{minted}
+  In the first example, \mintinline{haskell}{twice} has a generic type,
+  while in the second example, \mintinline{haskell}{g} has a non-generic type.
+  This means that \mintinline{haskell}{foo} in
+  the second example is not type correct.
+\end{example}
+
+Some extensions that we can think about are:
+\begin{description}[nosep]
+  \item [Type declarations] for sanity checks, and for relaxed restrictions.
+  \item [Incremental type checking] if the whole program is not given at
+        the same time, we can still soundly infer the types.
+  \item [Typing references to mutable objects] HM is unsound
+        for a language with refs (mutable locations).
+  \item [Overloading resolution]
+\end{description}
+
+
+
+
+
+
+
+
+
+\end{document}
